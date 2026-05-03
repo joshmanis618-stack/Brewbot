@@ -1,0 +1,109 @@
+:root {
+  --bb-amber:      #f59e0b;
+  --bb-amber-dark: #d97706;
+  --bb-dark:       #1c1917;
+  --bb-dark-card:  #292524;
+  --bb-muted:      #78716c;
+}
+
+/* ── Navbar ─────────────────────────────────────────────────────────────── */
+.navbar-brewbot { background-color: var(--bb-dark) !important; }
+.navbar-brewbot .navbar-brand { color: var(--bb-amber) !important; font-size: 1.3rem; }
+.navbar-brewbot .nav-link { color: #d6d3d1 !important; }
+.navbar-brewbot .nav-link:hover,
+.navbar-brewbot .nav-link.active { color: var(--bb-amber) !important; }
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+.btn-brew {
+  background-color: var(--bb-amber);
+  border-color: var(--bb-amber);
+  color: #fff;
+  font-weight: 500;
+}
+.btn-brew:hover, .btn-brew:focus {
+  background-color: var(--bb-amber-dark);
+  border-color: var(--bb-amber-dark);
+  color: #fff;
+}
+
+/* ── Device tiles ───────────────────────────────────────────────────────── */
+.device-tile {
+  background: var(--bb-dark-card);
+  color: #f5f5f4;
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid #3d3937;
+  transition: border-color 0.2s;
+}
+.device-tile:hover { border-color: var(--bb-amber); }
+.device-tile .device-value {
+  font-size: 2.6rem;
+  font-weight: 700;
+  color: var(--bb-amber);
+  line-height: 1;
+}
+.device-tile .device-unit { color: #a8a29e; font-size: 1rem; }
+.device-tile .device-name { color: #d6d3d1; font-size: 0.85rem; margin-top: 0.4rem; }
+.device-tile .device-role { color: var(--bb-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+
+/* ── Status dot ─────────────────────────────────────────────────────────── */
+.status-dot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.status-dot.online  { background: #22c55e; box-shadow: 0 0 6px #22c55e88; }
+.status-dot.offline { background: #6b7280; }
+
+/* ── Relay tile ─────────────────────────────────────────────────────────── */
+.relay-state-on  { color: #22c55e; font-weight: 700; }
+.relay-state-off { color: #6b7280; }
+
+/* ── Recipe cards ───────────────────────────────────────────────────────── */
+.recipe-card { transition: transform 0.15s, box-shadow 0.15s; cursor: pointer; }
+.recipe-card:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,0,0,.12); }
+.recipe-card .stat-label { font-size: 0.7rem; color: var(--bb-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.recipe-card .stat-val   { font-size: 1.1rem; font-weight: 600; }
+
+/* ── SRM colour chip ────────────────────────────────────────────────────── */
+.srm-chip {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  display: inline-block;
+  border: 2px solid #dee2e6;
+  flex-shrink: 0;
+}
+
+/* ── Section headers ────────────────────────────────────────────────────── */
+.section-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--bb-muted);
+  margin-bottom: 0.75rem;
+}
+
+/* ── Ingredient table ───────────────────────────────────────────────────── */
+.ingredient-table th { font-size: 0.8rem; color: var(--bb-muted); font-weight: 500; }
+.ingredient-table td { vertical-align: middle; }
+
+/* ── Page titles ────────────────────────────────────────────────────────── */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.page-header h1 { font-size: 1.5rem; font-weight: 700; margin: 0; }
+
+/* ── Getting started empty state ────────────────────────────────────────── */
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--bb-muted);
+}
+.empty-state i { font-size: 3rem; display: block; margin-bottom: 1rem; }

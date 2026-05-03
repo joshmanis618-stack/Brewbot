@@ -1,0 +1,4 @@
+paho-mqtt>=2.0
+gpiozero
+# lgpio is the Pi 5 GPIO backend — installed via apt, not pip:
+#   sudo apt install python3-lgpio

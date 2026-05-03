@@ -7,8 +7,11 @@ services:
       - "8000:8000"
     environment:
       - DATABASE_URL=postgresql://brewbot:brewbot@db:5432/brewbot
+      - MQTT_HOST=mosquitto
+      - MQTT_PORT=1883
     depends_on:
       - db
+      - mosquitto
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   db:
@@ -22,5 +25,15 @@ services:
     ports:
       - "5432:5432"
 
+  mosquitto:
+    image: eclipse-mosquitto:2
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto_data:/mosquitto/data
+    ports:
+      - "1883:1883"    # MQTT (controller hardware on LAN connects here)
+      - "9001:9001"    # MQTT over WebSocket (browser clients)
+
 volumes:
   postgres_data:
+  mosquitto_data:

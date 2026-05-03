@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Brewbot{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-speedometer2 me-2 text-warning"></i>Dashboard</h1>
+  {% if active_sessions %}
+  <span class="badge bg-success fs-6 px-3 py-2">
+    <i class="bi bi-play-circle me-1"></i>{{ active_sessions|length }} Active Session{{ 's' if active_sessions|length != 1 }}
+  </span>
+  {% endif %}
+</div>
+
+{% if active_sessions %}
+<!-- Active Brew Sessions Banner -->
+<div class="row g-3 mb-4">
+  {% for session in active_sessions %}
+  <div class="col-md-6 col-xl-4">
+    <div class="card border-success">
+      <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <span class="badge bg-success">{{ session.status|title }}</span>
+          <small class="text-muted">Session #{{ session.id }}</small>
+        </div>
+        <h5 class="card-title mb-1">{{ session.recipe.name if session.recipe else "Unknown Recipe" }}</h5>
+        {% if session.actual_og %}
+        <small class="text-muted">OG {{ "%.3f"|format(session.actual_og) }}</small>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Live Controller Readings -->
+<div class="section-title">Live Controller</div>
+{% if devices %}
+<div class="row g-3 mb-4">
+  {% for device in devices %}
+  <div class="col-6 col-sm-4 col-md-3 col-xl-2">
+    <div class="device-tile h-100" data-device-key="{{ device.device_key }}">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <span class="status-dot {{ 'online' if device.is_online else 'offline' }}"></span>
+        <small class="text-muted" style="font-size:0.7rem;">{{ device.type|replace('_',' ')|title }}</small>
+      </div>
+
+      {% if device.type == 'temperature_sensor' %}
+        <div class="device-value">
+          {{ "%.1f"|format(device.current_value) if device.current_value is not none else "—" }}
+        </div>
+        <div class="device-unit">°{{ device.current_unit or 'C' }}</div>
+
+      {% elif device.type in ['heater','pump','valve','gas_solenoid'] %}
+        <div class="mt-2 d-flex gap-2">
+          <button class="btn btn-sm btn-success flex-fill"
+                  onclick="sendCommand({{ device.id }}, 'on')">
+            <i class="bi bi-toggle-on"></i> ON
+          </button>
+          <button class="btn btn-sm btn-secondary flex-fill"
+                  onclick="sendCommand({{ device.id }}, 'off')">
+            <i class="bi bi-toggle-off"></i> OFF
+          </button>
+        </div>
+
+      {% else %}
+        <div class="device-value" style="font-size:1.5rem;">
+          {{ device.current_value if device.current_value is not none else "—" }}
+        </div>
+      {% endif %}
+
+      <div class="device-name mt-2">{{ device.name }}</div>
+      {% if device.role %}
+      <div class="device-role">{{ device.role|replace('_',' ') }}</div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card mb-4">
+  <div class="empty-state">
+    <i class="bi bi-cpu text-muted"></i>
+    <p class="mb-1 fw-semibold">No controller devices yet</p>
+    <p class="small text-muted mb-3">Connect a Raspberry Pi or ESP32 running the Brewbot controller script.</p>
+    <a href="/devices" class="btn btn-brew btn-sm">Set up Controller</a>
+  </div>
+</div>
+{% endif %}
+
+<!-- Recent Recipes -->
+<div class="section-title">Recent Recipes</div>
+{% if recent_recipes %}
+<div class="row g-3">
+  {% for recipe in recent_recipes %}
+  <div class="col-sm-6 col-lg-4 col-xl-3">
+    <a href="/recipes/{{ recipe.id }}" class="text-decoration-none">
+      <div class="card recipe-card h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            {% if recipe.color_srm %}
+            <span class="srm-chip" data-srm="{{ recipe.color_srm }}"></span>
+            {% endif %}
+            <span class="badge bg-secondary">{{ recipe.type }}</span>
+          </div>
+          <h6 class="card-title text-dark mb-3">{{ recipe.name }}</h6>
+          <div class="row g-2 text-center">
+            {% if recipe.abv %}
+            <div class="col-4">
+              <div class="stat-label">ABV</div>
+              <div class="stat-val text-dark">{{ "%.1f"|format(recipe.abv) }}%</div>
+            </div>
+            {% endif %}
+            {% if recipe.ibu %}
+            <div class="col-4">
+              <div class="stat-label">IBU</div>
+              <div class="stat-val text-dark">{{ recipe.ibu|int }}</div>
+            </div>
+            {% endif %}
+            <div class="col-4">
+              <div class="stat-label">Batch</div>
+              <div class="stat-val text-dark">{{ recipe.batch_size_l }}L</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </a>
+  </div>
+  {% endfor %}
+  <div class="col-sm-6 col-lg-4 col-xl-3">
+    <a href="/recipes/new" class="text-decoration-none h-100 d-block">
+      <div class="card h-100 border-dashed d-flex align-items-center justify-content-center" style="border-style:dashed; min-height:130px;">
+        <div class="text-center text-muted py-3">
+          <i class="bi bi-plus-circle fs-3 d-block mb-1"></i>
+          <small>New Recipe</small>
+        </div>
+      </div>
+    </a>
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <i class="bi bi-journal-plus text-muted"></i>
+    <p class="mb-1 fw-semibold">No recipes yet</p>
+    <p class="small text-muted mb-3">Add your first recipe to get started.</p>
+    <a href="/recipes/new" class="btn btn-brew btn-sm">Create Recipe</a>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

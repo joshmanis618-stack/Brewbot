@@ -1,0 +1,198 @@
+# ============================================================
+# Brewbot ESPHome Node Template
+# ============================================================
+# Works on any ESP32 board (ESP32-DevKit, NodeMCU-32, etc.)
+#
+# SETUP:
+#   1. Install ESPHome:  pip install esphome
+#   2. Copy secrets.yaml.example → secrets.yaml and fill in values
+#   3. Flash:            esphome run brewbot_node.yaml
+#   4. After boot the node announces itself to Brewbot — go to
+#      the Brewbot UI, find the auto-registered device, and
+#      assign it a role (hlt_temp, hlt_heater, pump_1, etc.)
+#
+# WIRING (example — adjust pin numbers to your board):
+#   DS18B20 data    → GPIO4   (add 4.7kΩ pull-up to 3.3V)
+#   Relay 1 (IN1)   → GPIO16  (heater / SSR)
+#   Relay 2 (IN2)   → GPIO17  (pump)
+#   Relay 3 (IN3)   → GPIO18  (valve 1)
+#   Relay 4 (IN4)   → GPIO19  (valve 2)
+#   All relay VCC   → 5V, GND → GND
+#
+# For a Pi 5 setup, use controller/pi/brewbot_controller.py instead.
+# ============================================================
+
+substitutions:
+  # Unique key for this node — must match what Brewbot expects.
+  # Use snake_case, no spaces. Examples:
+  #   hlt_node | mlt_node | bk_node | full_rig_node
+  node_name: "brewbot_node_01"
+
+  # IP or hostname of your Brewbot server
+  mqtt_broker: "192.168.1.100"
+
+esphome:
+  name: ${node_name}
+  friendly_name: "Brewbot Node 01"
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+logger:
+  level: INFO
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    # Fallback hotspot if WiFi fails — connect to configure
+    ssid: "Brewbot-Fallback"
+    password: "brewbot123"
+
+captive_portal:
+
+mqtt:
+  broker: ${mqtt_broker}
+  port: 1883
+  # Announce this node to Brewbot on every connect
+  birth_message:
+    topic: "brewbot/register"
+    payload: >-
+      {"device_key":"${node_name}","name":"Brewbot Node 01","type":"multi_node"}
+    retain: false
+  # Tell Brewbot we went offline if we disconnect unexpectedly
+  will_message:
+    topic: "brewbot/${node_name}/state"
+    payload: '{"online":false}'
+    retain: true
+  on_connect:
+    - mqtt.publish:
+        topic: "brewbot/${node_name}/state"
+        payload: '{"online":true}'
+        retain: true
+
+# ── Temperature sensors (DS18B20 one-wire) ───────────────────────────────────
+# Run  esphome run brewbot_node.yaml  once to see sensor addresses in the log,
+# then paste the addresses below.
+
+one_wire:
+  - platform: gpio
+    pin: GPIO4
+
+sensor:
+  - platform: dallas_temp
+    # Replace with the address printed in the log (0x28XXXXXXXXXXXX)
+    address: 0x0000000000000000
+    name: "Temperature Sensor 1"
+    id: temp_sensor_1
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    update_interval: 30s
+    filters:
+      - filter_out: nan
+    on_value:
+      - mqtt.publish:
+          topic: "brewbot/${node_name}_temp1/reading"
+          payload: !lambda |-
+            return "{\"value\":" + to_string(x) + ",\"unit\":\"C\"}";
+
+  # Add more sensors here — duplicate the block above, change address + id + topic suffix
+
+# ── Relay outputs ─────────────────────────────────────────────────────────────
+# Each relay subscribes to its command topic.
+# Send {"action":"on"} or {"action":"off"} from Brewbot.
+# Active-low relay boards: set inverted: true
+
+switch:
+  - platform: gpio
+    pin:
+      number: GPIO16
+      inverted: false      # set true for active-low relay boards
+    name: "Relay 1 (Heater/SSR)"
+    id: relay_1
+    restore_mode: ALWAYS_OFF
+    on_turn_on:
+      - mqtt.publish:
+          topic: "brewbot/${node_name}_relay1/state"
+          payload: '{"online":true,"state":"on"}'
+    on_turn_off:
+      - mqtt.publish:
+          topic: "brewbot/${node_name}_relay1/state"
+          payload: '{"online":true,"state":"off"}'
+
+  - platform: gpio
+    pin:
+      number: GPIO17
+      inverted: false
+    name: "Relay 2 (Pump)"
+    id: relay_2
+    restore_mode: ALWAYS_OFF
+    on_turn_on:
+      - mqtt.publish:
+          topic: "brewbot/${node_name}_relay2/state"
+          payload: '{"online":true,"state":"on"}'
+    on_turn_off:
+      - mqtt.publish:
+          topic: "brewbot/${node_name}_relay2/state"
+          payload: '{"online":true,"state":"off"}'
+
+  - platform: gpio
+    pin:
+      number: GPIO18
+      inverted: false
+    name: "Relay 3 (Valve 1)"
+    id: relay_3
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    pin:
+      number: GPIO19
+      inverted: false
+    name: "Relay 4 (Valve 2)"
+    id: relay_4
+    restore_mode: ALWAYS_OFF
+
+# ── Command subscriptions ─────────────────────────────────────────────────────
+# Brewbot publishes {"action":"on"} / {"action":"off"} to these topics.
+# Add one block per relay.
+
+mqtt:
+  on_message:
+    - topic: "brewbot/${node_name}_relay1/command"
+      then:
+        - lambda: |-
+            std::string s(x.c_str());
+            if (s.find("\"on\"") != std::string::npos) {
+              id(relay_1).turn_on();
+            } else {
+              id(relay_1).turn_off();
+            }
+    - topic: "brewbot/${node_name}_relay2/command"
+      then:
+        - lambda: |-
+            std::string s(x.c_str());
+            if (s.find("\"on\"") != std::string::npos) {
+              id(relay_2).turn_on();
+            } else {
+              id(relay_2).turn_off();
+            }
+    - topic: "brewbot/${node_name}_relay3/command"
+      then:
+        - lambda: |-
+            std::string s(x.c_str());
+            if (s.find("\"on\"") != std::string::npos) {
+              id(relay_3).turn_on();
+            } else {
+              id(relay_3).turn_off();
+            }
+    - topic: "brewbot/${node_name}_relay4/command"
+      then:
+        - lambda: |-
+            std::string s(x.c_str());
+            if (s.find("\"on\"") != std::string::npos) {
+              id(relay_4).turn_on();
+            } else {
+              id(relay_4).turn_off();
+            }

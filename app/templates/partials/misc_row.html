@@ -1,0 +1,32 @@
+<tr data-row-type="misc">
+  <td>
+    <select name="misc_id_{{ index }}" class="form-select form-select-sm" required>
+      <option value="">— Select —</option>
+      {% for m in miscs %}
+      <option value="{{ m.id }}">{{ m.name }}{% if m.type %} ({{ m.type }}){% endif %}</option>
+      {% endfor %}
+    </select>
+  </td>
+  <td>
+    <input name="misc_amount_{{ index }}" type="number" step="0.1" min="0"
+           class="form-control form-control-sm" placeholder="amount" required>
+  </td>
+  <td>
+    <select name="misc_use_{{ index }}" class="form-select form-select-sm">
+      <option>Boil</option>
+      <option>Mash</option>
+      <option>Primary</option>
+      <option>Secondary</option>
+      <option>Bottling</option>
+    </select>
+  </td>
+  <td>
+    <input name="misc_time_{{ index }}" type="number" min="0"
+           class="form-control form-control-sm" value="0">
+  </td>
+  <td>
+    <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)">
+      <i class="bi bi-x"></i>
+    </button>
+  </td>
+</tr>

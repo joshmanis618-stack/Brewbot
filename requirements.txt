@@ -4,5 +4,6 @@ sqlalchemy
 psycopg2-binary
 alembic
 python-dotenv
-htmx
 jinja2
+aiomqtt
+python-multipart

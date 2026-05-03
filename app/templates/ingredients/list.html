@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Ingredients — Brewbot{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-basket me-2 text-warning"></i>Ingredient Library</h1>
+</div>
+
+<ul class="nav nav-tabs mb-4">
+  <li class="nav-item">
+    <a class="nav-link {{ 'active' if tab == 'fermentables' }}" href="/ingredients?tab=fermentables">
+      Fermentables <span class="badge bg-secondary ms-1">{{ fermentables|length }}</span>
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {{ 'active' if tab == 'hops' }}" href="/ingredients?tab=hops">
+      Hops <span class="badge bg-secondary ms-1">{{ hops|length }}</span>
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {{ 'active' if tab == 'yeasts' }}" href="/ingredients?tab=yeasts">
+      Yeast <span class="badge bg-secondary ms-1">{{ yeasts|length }}</span>
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {{ 'active' if tab == 'miscs' }}" href="/ingredients?tab=miscs">
+      Misc <span class="badge bg-secondary ms-1">{{ miscs|length }}</span>
+    </a>
+  </li>
+</ul>
+
+{% if tab == 'fermentables' %}
+<div class="d-flex justify-content-end mb-3">
+  <a href="/docs#/ingredients/create_item_fermentables__post" target="_blank" class="btn btn-brew btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>Add via API
+  </a>
+</div>
+<div class="table-responsive">
+  <table class="table table-hover ingredient-table">
+    <thead class="table-light">
+      <tr><th>Name</th><th>Type</th><th>Origin</th><th class="text-end">Color (SRM)</th><th class="text-end">Yield %</th><th class="text-end">Potential</th></tr>
+    </thead>
+    <tbody>
+      {% for f in fermentables %}
+      <tr>
+        <td class="fw-semibold">
+          <span class="srm-chip me-2" data-srm="{{ f.color_srm }}" style="width:14px;height:14px;vertical-align:middle;"></span>
+          {{ f.name }}
+        </td>
+        <td>{{ f.type }}</td>
+        <td>{{ f.origin or '—' }}</td>
+        <td class="text-end">{{ f.color_srm }}</td>
+        <td class="text-end">{{ f.yield_pct }}%</td>
+        <td class="text-end">{{ "%.3f"|format(f.potential) }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="text-center text-muted py-4">No fermentables in library yet — add them via the API.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% elif tab == 'hops' %}
+<div class="table-responsive">
+  <table class="table table-hover ingredient-table">
+    <thead class="table-light">
+      <tr><th>Name</th><th>Type</th><th>Origin</th><th class="text-end">Alpha %</th><th class="text-end">Beta %</th><th>Substitutes</th></tr>
+    </thead>
+    <tbody>
+      {% for h in hops %}
+      <tr>
+        <td class="fw-semibold">{{ h.name }}</td>
+        <td>{{ h.type or '—' }}</td>
+        <td>{{ h.origin or '—' }}</td>
+        <td class="text-end fw-semibold text-success">{{ h.alpha_pct }}%</td>
+        <td class="text-end">{{ h.beta_pct or '—' }}</td>
+        <td><small class="text-muted">{{ h.substitutes or '—' }}</small></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="text-center text-muted py-4">No hops in library yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% elif tab == 'yeasts' %}
+<div class="table-responsive">
+  <table class="table table-hover ingredient-table">
+    <thead class="table-light">
+      <tr><th>Name</th><th>Lab</th><th>Type</th><th>Form</th><th class="text-end">Attenuation</th><th>Temp Range</th><th>Flocculation</th></tr>
+    </thead>
+    <tbody>
+      {% for y in yeasts %}
+      <tr>
+        <td class="fw-semibold">{{ y.name }}</td>
+        <td>{{ y.lab or '—' }}</td>
+        <td>{{ y.type or '—' }}</td>
+        <td>{{ y.form or '—' }}</td>
+        <td class="text-end">{{ y.attenuation_pct }}%</td>
+        <td>
+          {% if y.min_temp_c and y.max_temp_c %}
+          {{ y.min_temp_c }}–{{ y.max_temp_c }} °C
+          {% else %}—{% endif %}
+        </td>
+        <td>{{ y.flocculation or '—' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="text-center text-muted py-4">No yeasts in library yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% elif tab == 'miscs' %}
+<div class="table-responsive">
+  <table class="table table-hover ingredient-table">
+    <thead class="table-light">
+      <tr><th>Name</th><th>Type</th><th>Use For</th><th>Notes</th></tr>
+    </thead>
+    <tbody>
+      {% for m in miscs %}
+      <tr>
+        <td class="fw-semibold">{{ m.name }}</td>
+        <td>{{ m.type or '—' }}</td>
+        <td>{{ m.use_for or '—' }}</td>
+        <td><small class="text-muted">{{ m.notes or '—' }}</small></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="text-center text-muted py-4">No misc ingredients in library yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<div class="mt-3 text-muted small">
+  <i class="bi bi-info-circle me-1"></i>
+  Ingredients are managed via the <a href="/docs" target="_blank">REST API</a>.
+  BeerXML import is coming soon.
+</div>
+{% endblock %}

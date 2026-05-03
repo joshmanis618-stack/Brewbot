@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Equipment — Brewbot{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-tools me-2 text-warning"></i>Equipment</h1>
+  <button class="btn btn-brew" data-bs-toggle="modal" data-bs-target="#newEquipModal">
+    <i class="bi bi-plus-lg me-1"></i>Add Equipment
+  </button>
+</div>
+
+{% if equipment_list %}
+<div class="row g-3">
+  {% for item in equipment_list %}
+  <div class="col-md-6 col-xl-4">
+    <div class="card h-100">
+      <div class="card-body">
+        <h5 class="card-title mb-3">{{ item.name }}</h5>
+        <table class="table table-sm mb-0">
+          <tbody>
+            <tr><td class="text-muted">Batch size</td><td class="fw-semibold">{{ item.batch_size_l }} L</td></tr>
+            <tr><td class="text-muted">Pre-boil vol.</td><td class="fw-semibold">{{ item.boil_size_l }} L</td></tr>
+            <tr><td class="text-muted">Boil time</td><td class="fw-semibold">{{ item.boil_time_min }} min</td></tr>
+            <tr><td class="text-muted">Efficiency</td><td class="fw-semibold">{{ item.efficiency }}%</td></tr>
+            <tr><td class="text-muted">Trub loss</td><td class="fw-semibold">{{ item.trub_chiller_loss_l }} L</td></tr>
+          </tbody>
+        </table>
+        {% if item.notes %}
+        <p class="small text-muted mt-2 mb-0">{{ item.notes }}</p>
+        {% endif %}
+      </div>
+      <div class="card-footer bg-transparent">
+        <form method="post" action="/equipment/{{ item.id }}/delete"
+              onsubmit="return confirm('Delete {{ item.name }}?')">
+          <button class="btn btn-sm btn-outline-danger">
+            <i class="bi bi-trash me-1"></i>Delete
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <i class="bi bi-tools text-muted"></i>
+    <p class="fw-semibold mb-1">No equipment profiles yet</p>
+    <p class="small text-muted mb-3">Add your brew rig's specs so recipes can calculate accurately.</p>
+    <button class="btn btn-brew btn-sm" data-bs-toggle="modal" data-bs-target="#newEquipModal">
+      Add Equipment Profile
+    </button>
+  </div>
+</div>
+{% endif %}
+
+<!-- New Equipment Modal -->
+<div class="modal fade" id="newEquipModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="post" action="/equipment">
+        <div class="modal-header">
+          <h5 class="modal-title fw-bold">New Equipment Profile</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label">Profile Name <span class="text-danger">*</span></label>
+              <input type="text" name="name" class="form-control" required placeholder="e.g. 3-Vessel HERMS 40L">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Batch Size (L) <span class="text-danger">*</span></label>
+              <input type="number" name="batch_size_l" class="form-control" step="0.5" required placeholder="19">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Pre-boil Volume (L) <span class="text-danger">*</span></label>
+              <input type="number" name="boil_size_l" class="form-control" step="0.5" required placeholder="25">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Boil Time (min)</label>
+              <input type="number" name="boil_time_min" class="form-control" value="60">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Mash Efficiency (%)</label>
+              <input type="number" name="efficiency" class="form-control" step="0.5" value="75">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Trub/Chiller Loss (L)</label>
+              <input type="number" name="trub_chiller_loss_l" class="form-control" step="0.1" value="1.0">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Notes</label>
+              <textarea name="notes" class="form-control" rows="2" placeholder="Description of your setup…"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-brew">Save Equipment</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

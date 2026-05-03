@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Brewbot{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="/static/css/brewbot.css">
+</head>
+<body class="bg-light">
+
+<nav class="navbar navbar-expand-lg navbar-dark navbar-brewbot sticky-top shadow-sm">
+  <div class="container-fluid px-4">
+    <a class="navbar-brand fw-bold" href="/">
+      <i class="bi bi-thermometer-half me-1"></i>Brewbot
+    </a>
+    <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navMain">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navMain">
+      <ul class="navbar-nav me-auto mb-2 mb-lg-0 gap-1">
+        <li class="nav-item">
+          <a class="nav-link rounded px-3 {% if page == 'dashboard' %}active{% endif %}" href="/">
+            <i class="bi bi-speedometer2 me-1"></i>Dashboard
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link rounded px-3 {% if page == 'recipes' %}active{% endif %}" href="/recipes">
+            <i class="bi bi-journal-text me-1"></i>Recipes
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link rounded px-3 {% if page == 'equipment' %}active{% endif %}" href="/equipment">
+            <i class="bi bi-tools me-1"></i>Equipment
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link rounded px-3 {% if page == 'ingredients' %}active{% endif %}" href="/ingredients">
+            <i class="bi bi-basket me-1"></i>Ingredients
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link rounded px-3 {% if page == 'devices' %}active{% endif %}" href="/devices">
+            <i class="bi bi-cpu me-1"></i>Controller
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link rounded px-3 {% if page == 'brew_sessions' %}active{% endif %}" href="/brew-sessions">
+            <i class="bi bi-clipboard-data me-1"></i>Brew Sessions
+          </a>
+        </li>
+      </ul>
+      <a href="/docs" class="btn btn-outline-secondary btn-sm" target="_blank">
+        <i class="bi bi-code-slash me-1"></i>API
+      </a>
+    </div>
+  </div>
+</nav>
+
+<main class="container-fluid px-4 py-4" style="max-width: 1400px;">
+  {% block content %}{% endblock %}
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"></script>
+<script src="/static/js/brewbot.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

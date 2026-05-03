@@ -1,0 +1,326 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit ' + recipe.name if recipe else 'New Recipe' }} — Brewbot{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <nav aria-label="breadcrumb"><ol class="breadcrumb mb-1 small">
+      <li class="breadcrumb-item"><a href="/recipes">Recipes</a></li>
+      <li class="breadcrumb-item active">{{ 'Edit' if recipe else 'New Recipe' }}</li>
+    </ol></nav>
+    <h1>{{ 'Edit ' + recipe.name if recipe else 'New Recipe' }}</h1>
+  </div>
+</div>
+
+<form method="post"
+      action="{{ '/recipes/' + recipe.id|string + '/update' if recipe else '/recipes' }}">
+
+  <div class="row g-4">
+    <!-- ── Basic Info ────────────────────���────────────────────────────── -->
+    <div class="col-lg-8">
+      <div class="card mb-4">
+        <div class="card-header fw-semibold">Basic Info</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-8">
+              <label class="form-label">Recipe Name <span class="text-danger">*</span></label>
+              <input type="text" name="name" class="form-control" required
+                     value="{{ recipe.name if recipe else '' }}" placeholder="e.g. Hoppy IPA">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Type</label>
+              <select name="type" class="form-select">
+                {% for t in ['All Grain','Extract','Partial Mash'] %}
+                <option value="{{ t }}" {{ 'selected' if recipe and recipe.type == t }}>{{ t }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Style</label>
+              <select name="style_id" class="form-select">
+                <option value="">— None —</option>
+                {% for s in styles %}
+                <option value="{{ s.id }}" {{ 'selected' if recipe and recipe.style_id == s.id }}>
+                  {{ s.name }}{% if s.style_guide %} ({{ s.style_guide }}){% endif %}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Equipment Profile</label>
+              <select name="equipment_id" class="form-select">
+                <option value="">— None —</option>
+                {% for e in equipment_list %}
+                <option value="{{ e.id }}" {{ 'selected' if recipe and recipe.equipment_id == e.id }}>
+                  {{ e.name }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Batch Size (L) <span class="text-danger">*</span></label>
+              <input type="number" name="batch_size_l" class="form-control" step="0.1" required
+                     value="{{ recipe.batch_size_l if recipe else '19' }}">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Pre-boil Volume (L)</label>
+              <input type="number" name="boil_size_l" class="form-control" step="0.1"
+                     value="{{ recipe.boil_size_l if recipe else '' }}" placeholder="e.g. 25">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Boil Time (min)</label>
+              <input type="number" name="boil_time_min" class="form-control"
+                     value="{{ recipe.boil_time_min if recipe else '60' }}">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Efficiency (%)</label>
+              <input type="number" name="efficiency" class="form-control" step="0.1"
+                     value="{{ recipe.efficiency if recipe else '75' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Brewer</label>
+              <input type="text" name="brewer" class="form-control"
+                     value="{{ recipe.brewer if recipe else '' }}" placeholder="Your name">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Fermentables ──────────────────��────────────────────────── -->
+      <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
+          <span><i class="bi bi-bag me-2"></i>Fermentables</span>
+          <button type="button" class="btn btn-brew btn-sm"
+                  onclick="addIngredientRow('fermentable')">
+            <i class="bi bi-plus-lg me-1"></i>Add
+          </button>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm mb-0 ingredient-table">
+            <thead>
+              <tr>
+                <th style="min-width:200px;">Fermentable</th>
+                <th style="width:110px;">Amount (kg)</th>
+                <th style="width:110px;">After Boil?</th>
+                <th style="width:44px;"></th>
+              </tr>
+            </thead>
+            <tbody id="fermentables-tbody">
+              {% if recipe %}
+              {% for i, rf in recipe.fermentables|enumerate %}
+              <tr data-row-type="fermentable">
+                <td>
+                  <select name="fermentable_id_{{ i }}" class="form-select form-select-sm" required>
+                    {% for f in recipe.fermentables[0].fermentable.__class__.query.order_by('name').all() if false %}{% endfor %}
+                    <option value="{{ rf.fermentable.id }}" selected>{{ rf.fermentable.name }}</option>
+                  </select>
+                </td>
+                <td><input name="amount_kg_{{ i }}" type="number" step="0.01" class="form-control form-control-sm" value="{{ rf.amount_kg }}" required></td>
+                <td class="text-center"><input name="add_after_boil_{{ i }}" type="checkbox" class="form-check-input" value="1" {{ 'checked' if rf.add_after_boil }}></td>
+                <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)"><i class="bi bi-x"></i></button></td>
+              </tr>
+              {% endfor %}
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+        <div id="fermentables-empty" class="text-center text-muted py-3 small {{ 'd-none' if recipe and recipe.fermentables }}">
+          No fermentables added yet
+        </div>
+      </div>
+
+      <!-- ── Hops ───────────────────────────────────────────────────── -->
+      <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
+          <span><i class="bi bi-flower1 me-2"></i>Hops</span>
+          <button type="button" class="btn btn-brew btn-sm"
+                  onclick="addIngredientRow('hop')">
+            <i class="bi bi-plus-lg me-1"></i>Add
+          </button>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm mb-0 ingredient-table">
+            <thead>
+              <tr>
+                <th style="min-width:160px;">Hop</th>
+                <th style="width:90px;">Amount (g)</th>
+                <th style="width:85px;">Time (min)</th>
+                <th style="width:110px;">Use</th>
+                <th style="width:100px;">Form</th>
+                <th style="width:44px;"></th>
+              </tr>
+            </thead>
+            <tbody id="hops-tbody">
+              {% if recipe %}
+              {% for i, rh in recipe.hops|enumerate %}
+              <tr data-row-type="hop">
+                <td><select name="hop_id_{{ i }}" class="form-select form-select-sm" required>
+                  <option value="{{ rh.hop.id }}" selected>{{ rh.hop.name }}</option>
+                </select></td>
+                <td><input name="hop_amount_g_{{ i }}" type="number" step="0.1" class="form-control form-control-sm" value="{{ rh.amount_g }}" required></td>
+                <td><input name="time_min_{{ i }}" type="number" class="form-control form-control-sm" value="{{ rh.time_min }}"></td>
+                <td><select name="hop_use_{{ i }}" class="form-select form-select-sm">
+                  {% for u in ['Boil','Dry Hop','First Wort','Aroma','Mash'] %}
+                  <option {{ 'selected' if rh.use == u }}>{{ u }}</option>
+                  {% endfor %}
+                </select></td>
+                <td><select name="hop_form_{{ i }}" class="form-select form-select-sm">
+                  {% for f in ['Pellet','Plug','Leaf'] %}
+                  <option {{ 'selected' if rh.form == f }}>{{ f }}</option>
+                  {% endfor %}
+                </select></td>
+                <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)"><i class="bi bi-x"></i></button></td>
+              </tr>
+              {% endfor %}
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+        <div class="text-center text-muted py-3 small {{ 'd-none' if recipe and recipe.hops }}">
+          No hops added yet
+        </div>
+      </div>
+
+      <!-- ── Yeast ──────────────────────────────────────────────────── -->
+      <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
+          <span><i class="bi bi-droplet me-2"></i>Yeast</span>
+          <button type="button" class="btn btn-brew btn-sm"
+                  onclick="addIngredientRow('yeast')">
+            <i class="bi bi-plus-lg me-1"></i>Add
+          </button>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm mb-0 ingredient-table">
+            <thead>
+              <tr>
+                <th style="min-width:200px;">Yeast</th>
+                <th style="width:130px;">Amount (packets)</th>
+                <th style="width:44px;"></th>
+              </tr>
+            </thead>
+            <tbody id="yeasts-tbody">
+              {% if recipe %}
+              {% for i, ry in recipe.yeasts|enumerate %}
+              <tr data-row-type="yeast">
+                <td><select name="yeast_id_{{ i }}" class="form-select form-select-sm" required>
+                  <option value="{{ ry.yeast.id }}" selected>{{ ry.yeast.name }}{% if ry.yeast.lab %} ({{ ry.yeast.lab }}){% endif %}</option>
+                </select></td>
+                <td><input name="yeast_amount_{{ i }}" type="number" step="0.5" class="form-control form-control-sm" value="{{ ry.amount }}"></td>
+                <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)"><i class="bi bi-x"></i></button></td>
+              </tr>
+              {% endfor %}
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+        <div class="text-center text-muted py-3 small {{ 'd-none' if recipe and recipe.yeasts }}">
+          No yeast added yet
+        </div>
+      </div>
+
+      <!-- ── Misc ───────────────────────────────────────────────────── -->
+      <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
+          <span><i class="bi bi-plus-circle me-2"></i>Miscellaneous</span>
+          <button type="button" class="btn btn-brew btn-sm"
+                  onclick="addIngredientRow('misc')">
+            <i class="bi bi-plus-lg me-1"></i>Add
+          </button>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm mb-0 ingredient-table">
+            <thead>
+              <tr>
+                <th style="min-width:160px;">Item</th>
+                <th style="width:90px;">Amount</th>
+                <th style="width:80px;">Use</th>
+                <th style="width:85px;">Time (min)</th>
+                <th style="width:44px;"></th>
+              </tr>
+            </thead>
+            <tbody id="miscs-tbody">
+              {% if recipe %}
+              {% for i, rm in recipe.miscs|enumerate %}
+              <tr data-row-type="misc">
+                <td><select name="misc_id_{{ i }}" class="form-select form-select-sm" required>
+                  <option value="{{ rm.misc.id }}" selected>{{ rm.misc.name }}</option>
+                </select></td>
+                <td><input name="misc_amount_{{ i }}" type="number" step="0.1" class="form-control form-control-sm" value="{{ rm.amount }}"></td>
+                <td><select name="misc_use_{{ i }}" class="form-select form-select-sm">
+                  {% for u in ['Boil','Mash','Primary','Secondary','Bottling'] %}
+                  <option {{ 'selected' if rm.use == u }}>{{ u }}</option>
+                  {% endfor %}
+                </select></td>
+                <td><input name="misc_time_{{ i }}" type="number" class="form-control form-control-sm" value="{{ rm.time_min }}"></td>
+                <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)"><i class="bi bi-x"></i></button></td>
+              </tr>
+              {% endfor %}
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+        <div class="text-center text-muted py-3 small {{ 'd-none' if recipe and recipe.miscs }}">
+          No misc additions yet
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Notes sidebar ────────────────────��────────────────────────── -->
+    <div class="col-lg-4">
+      <div class="card mb-3 sticky-top" style="top: 75px;">
+        <div class="card-header fw-semibold">Targets & Notes</div>
+        <div class="card-body">
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label small">OG</label>
+              <input type="number" name="og" step="0.001" class="form-control form-control-sm"
+                     value="{{ recipe.og if recipe and recipe.og else '' }}" placeholder="1.050">
+            </div>
+            <div class="col-6">
+              <label class="form-label small">FG</label>
+              <input type="number" name="fg" step="0.001" class="form-control form-control-sm"
+                     value="{{ recipe.fg if recipe and recipe.fg else '' }}" placeholder="1.010">
+            </div>
+            <div class="col-6">
+              <label class="form-label small">ABV (%)</label>
+              <input type="number" name="abv" step="0.1" class="form-control form-control-sm"
+                     value="{{ recipe.abv if recipe and recipe.abv else '' }}" placeholder="5.2">
+            </div>
+            <div class="col-6">
+              <label class="form-label small">IBU</label>
+              <input type="number" name="ibu" step="1" class="form-control form-control-sm"
+                     value="{{ recipe.ibu|int if recipe and recipe.ibu else '' }}" placeholder="40">
+            </div>
+            <div class="col-6">
+              <label class="form-label small">Color (SRM)</label>
+              <input type="number" name="color_srm" step="0.1" class="form-control form-control-sm"
+                     value="{{ recipe.color_srm if recipe and recipe.color_srm else '' }}" placeholder="8">
+            </div>
+          </div>
+          <label class="form-label">Notes</label>
+          <textarea name="notes" class="form-control" rows="6"
+                    placeholder="Process notes, water chemistry, tasting notes…">{{ recipe.notes if recipe and recipe.notes else '' }}</textarea>
+        </div>
+        <div class="card-footer d-flex gap-2">
+          <button type="submit" class="btn btn-brew flex-fill">
+            <i class="bi bi-check-lg me-1"></i>{{ 'Save Changes' if recipe else 'Create Recipe' }}
+          </button>
+          <a href="{{ '/recipes/' + recipe.id|string if recipe else '/recipes' }}"
+             class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Pre-populate row counters from existing rows
+_rowCounters['fermentable'] = document.querySelectorAll('[data-row-type="fermentable"]').length;
+_rowCounters['hop']         = document.querySelectorAll('[data-row-type="hop"]').length;
+_rowCounters['yeast']       = document.querySelectorAll('[data-row-type="yeast"]').length;
+_rowCounters['misc']        = document.querySelectorAll('[data-row-type="misc"]').length;
+</script>
+{% endblock %}
