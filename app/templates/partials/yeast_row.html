@@ -1,9 +1,11 @@
 <tr data-row-type="yeast">
   <td>
-    <select name="yeast_id_{{ index }}" class="form-select form-select-sm" required>
+    <select name="yeast_id_{{ index }}" class="form-select form-select-sm ingredient-select" required
+            onchange="recalculate()">
       <option value="">— Select —</option>
       {% for y in yeasts %}
-      <option value="{{ y.id }}">
+      <option value="{{ y.id }}"
+              data-attenuation="{{ y.attenuation_pct }}">
         {{ y.name }}{% if y.lab %} — {{ y.lab }}{% endif %}
       </option>
       {% endfor %}

@@ -12,12 +12,14 @@
   </div>
 </div>
 
-<form method="post"
+<form id="recipe-form" method="post"
       action="{{ '/recipes/' + recipe.id|string + '/update' if recipe else '/recipes' }}">
 
   <div class="row g-4">
-    <!-- ── Basic Info ────────────────────���────────────────────────────── -->
+    <!-- ── Main column ──────────────────────────────────────────────── -->
     <div class="col-lg-8">
+
+      <!-- Basic Info -->
       <div class="card mb-4">
         <div class="card-header fw-semibold">Basic Info</div>
         <div class="card-body">
@@ -37,10 +39,16 @@
             </div>
             <div class="col-md-6">
               <label class="form-label">Style</label>
-              <select name="style_id" class="form-select">
+              <select name="style_id" class="form-select" onchange="updateStyleTargets()">
                 <option value="">— None —</option>
                 {% for s in styles %}
-                <option value="{{ s.id }}" {{ 'selected' if recipe and recipe.style_id == s.id }}>
+                <option value="{{ s.id }}"
+                        data-og-min="{{ s.og_min or '' }}" data-og-max="{{ s.og_max or '' }}"
+                        data-fg-min="{{ s.fg_min or '' }}" data-fg-max="{{ s.fg_max or '' }}"
+                        data-abv-min="{{ s.abv_min or '' }}" data-abv-max="{{ s.abv_max or '' }}"
+                        data-ibu-min="{{ s.ibu_min or '' }}" data-ibu-max="{{ s.ibu_max or '' }}"
+                        data-srm-min="{{ s.color_min or '' }}" data-srm-max="{{ s.color_max or '' }}"
+                        {{ 'selected' if recipe and recipe.style_id == s.id }}>
                   {{ s.name }}{% if s.style_guide %} ({{ s.style_guide }}){% endif %}
                 </option>
                 {% endfor %}
@@ -48,33 +56,46 @@
             </div>
             <div class="col-md-6">
               <label class="form-label">Equipment Profile</label>
-              <select name="equipment_id" class="form-select">
+              <select name="equipment_id" id="equipment_select" class="form-select"
+                      onchange="applyEquipmentProfile(this)">
                 <option value="">— None —</option>
                 {% for e in equipment_list %}
-                <option value="{{ e.id }}" {{ 'selected' if recipe and recipe.equipment_id == e.id }}>
+                <option value="{{ e.id }}"
+                        data-batch="{{ e.batch_size_l }}" data-boil="{{ e.boil_size_l }}"
+                        data-time="{{ e.boil_time_min }}" data-efficiency="{{ e.efficiency }}"
+                        {{ 'selected' if recipe and recipe.equipment_id == e.id }}>
                   {{ e.name }}
                 </option>
                 {% endfor %}
               </select>
             </div>
             <div class="col-md-3">
-              <label class="form-label">Batch Size (L) <span class="text-danger">*</span></label>
-              <input type="number" name="batch_size_l" class="form-control" step="0.1" required
+              <label class="form-label">
+                Batch Size (<span data-ulabel="L|gal">L</span>) <span class="text-danger">*</span>
+              </label>
+              <input type="number" name="batch_size_l" id="batch_size_l" class="form-control"
+                     step="0.1" required oninput="recalculate()" data-utype="vol"
                      value="{{ recipe.batch_size_l if recipe else '19' }}">
             </div>
             <div class="col-md-3">
-              <label class="form-label">Pre-boil Volume (L)</label>
-              <input type="number" name="boil_size_l" class="form-control" step="0.1"
-                     value="{{ recipe.boil_size_l if recipe else '' }}" placeholder="e.g. 25">
+              <label class="form-label">
+                Pre-boil Volume (<span data-ulabel="L|gal">L</span>)
+              </label>
+              <input type="number" name="boil_size_l" id="boil_size_l" class="form-control"
+                     step="0.1" data-utype="vol"
+                     value="{{ recipe.boil_size_l if recipe else '' }}"
+                     placeholder="{{ recipe.boil_size_l if recipe else '26' }}">
             </div>
             <div class="col-md-3">
               <label class="form-label">Boil Time (min)</label>
-              <input type="number" name="boil_time_min" class="form-control"
+              <input type="number" name="boil_time_min" id="boil_time_min" class="form-control"
+                     oninput="recalculate()"
                      value="{{ recipe.boil_time_min if recipe else '60' }}">
             </div>
             <div class="col-md-3">
               <label class="form-label">Efficiency (%)</label>
-              <input type="number" name="efficiency" class="form-control" step="0.1"
+              <input type="number" name="efficiency" id="efficiency" class="form-control"
+                     step="0.1" oninput="recalculate()"
                      value="{{ recipe.efficiency if recipe else '75' }}">
             </div>
             <div class="col-md-6">
@@ -86,38 +107,48 @@
         </div>
       </div>
 
-      <!-- ── Fermentables ──────────────────��────────────────────────── -->
+      <!-- Fermentables -->
       <div class="card mb-4">
         <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
           <span><i class="bi bi-bag me-2"></i>Fermentables</span>
-          <button type="button" class="btn btn-brew btn-sm"
-                  onclick="addIngredientRow('fermentable')">
+          <button type="button" class="btn btn-brew btn-sm" onclick="addIngredientRow('fermentable')">
             <i class="bi bi-plus-lg me-1"></i>Add
           </button>
         </div>
         <div class="table-responsive">
           <table class="table table-sm mb-0 ingredient-table">
-            <thead>
-              <tr>
-                <th style="min-width:200px;">Fermentable</th>
-                <th style="width:110px;">Amount (kg)</th>
-                <th style="width:110px;">After Boil?</th>
-                <th style="width:44px;"></th>
-              </tr>
-            </thead>
+            <thead><tr>
+              <th style="min-width:200px;">Fermentable</th>
+              <th style="width:120px;">Amount (<span data-ulabel="kg|lb">kg</span>)</th>
+              <th style="width:100px;">After Boil?</th>
+              <th style="width:44px;"></th>
+            </tr></thead>
             <tbody id="fermentables-tbody">
               {% if recipe %}
               {% for i, rf in recipe.fermentables|enumerate %}
               <tr data-row-type="fermentable">
                 <td>
-                  <select name="fermentable_id_{{ i }}" class="form-select form-select-sm" required>
-                    {% for f in recipe.fermentables[0].fermentable.__class__.query.order_by('name').all() if false %}{% endfor %}
-                    <option value="{{ rf.fermentable.id }}" selected>{{ rf.fermentable.name }}</option>
+                  <select name="fermentable_id_{{ i }}" class="form-select form-select-sm ingredient-select"
+                          required onchange="fermentableSelected(this)">
+                    <option value="">— Select —</option>
+                    {% for f in all_fermentables %}
+                    <option value="{{ f.id }}"
+                            data-potential="{{ f.potential }}" data-yield="{{ f.yield_pct }}"
+                            data-color="{{ f.color_srm }}" data-type="{{ f.type }}"
+                            {{ 'selected' if f.id == rf.fermentable_id }}>
+                      {{ f.name }} ({{ f.type }})
+                    </option>
+                    {% endfor %}
                   </select>
                 </td>
-                <td><input name="amount_kg_{{ i }}" type="number" step="0.01" class="form-control form-control-sm" value="{{ rf.amount_kg }}" required></td>
-                <td class="text-center"><input name="add_after_boil_{{ i }}" type="checkbox" class="form-check-input" value="1" {{ 'checked' if rf.add_after_boil }}></td>
-                <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)"><i class="bi bi-x"></i></button></td>
+                <td><input name="amount_kg_{{ i }}" type="number" step="0.01"
+                           class="form-control form-control-sm" value="{{ rf.amount_kg }}"
+                           data-utype="kg" required oninput="recalculate()"></td>
+                <td class="text-center"><input name="add_after_boil_{{ i }}" type="checkbox"
+                           class="form-check-input" value="1"
+                           {{ 'checked' if rf.add_after_boil }} onchange="recalculate()"></td>
+                <td><button type="button" class="btn btn-sm btn-outline-danger"
+                            onclick="removeRow(this)"><i class="bi bi-x"></i></button></td>
               </tr>
               {% endfor %}
               {% endif %}
@@ -129,47 +160,58 @@
         </div>
       </div>
 
-      <!-- ── Hops ───────────────────────────────────────────────────── -->
+      <!-- Hops -->
       <div class="card mb-4">
         <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
           <span><i class="bi bi-flower1 me-2"></i>Hops</span>
-          <button type="button" class="btn btn-brew btn-sm"
-                  onclick="addIngredientRow('hop')">
+          <button type="button" class="btn btn-brew btn-sm" onclick="addIngredientRow('hop')">
             <i class="bi bi-plus-lg me-1"></i>Add
           </button>
         </div>
         <div class="table-responsive">
           <table class="table table-sm mb-0 ingredient-table">
-            <thead>
-              <tr>
-                <th style="min-width:160px;">Hop</th>
-                <th style="width:90px;">Amount (g)</th>
-                <th style="width:85px;">Time (min)</th>
-                <th style="width:110px;">Use</th>
-                <th style="width:100px;">Form</th>
-                <th style="width:44px;"></th>
-              </tr>
-            </thead>
+            <thead><tr>
+              <th style="min-width:160px;">Hop</th>
+              <th style="width:100px;">Amount (<span data-ulabel="g|oz">g</span>)</th>
+              <th style="width:85px;">Time (min)</th>
+              <th style="width:110px;">Use</th>
+              <th style="width:100px;">Form</th>
+              <th style="width:44px;"></th>
+            </tr></thead>
             <tbody id="hops-tbody">
               {% if recipe %}
               {% for i, rh in recipe.hops|enumerate %}
               <tr data-row-type="hop">
-                <td><select name="hop_id_{{ i }}" class="form-select form-select-sm" required>
-                  <option value="{{ rh.hop.id }}" selected>{{ rh.hop.name }}</option>
-                </select></td>
-                <td><input name="hop_amount_g_{{ i }}" type="number" step="0.1" class="form-control form-control-sm" value="{{ rh.amount_g }}" required></td>
-                <td><input name="time_min_{{ i }}" type="number" class="form-control form-control-sm" value="{{ rh.time_min }}"></td>
-                <td><select name="hop_use_{{ i }}" class="form-select form-select-sm">
+                <td>
+                  <select name="hop_id_{{ i }}" class="form-select form-select-sm ingredient-select"
+                          required onchange="recalculate()">
+                    <option value="">— Select —</option>
+                    {% for h in all_hops %}
+                    <option value="{{ h.id }}" data-alpha="{{ h.alpha_pct }}"
+                            {{ 'selected' if h.id == rh.hop_id }}>
+                      {{ h.name }} ({{ h.alpha_pct }}% AA)
+                    </option>
+                    {% endfor %}
+                  </select>
+                </td>
+                <td><input name="hop_amount_g_{{ i }}" type="number" step="0.1"
+                           class="form-control form-control-sm" value="{{ rh.amount_g }}"
+                           data-utype="g" required oninput="recalculate()"></td>
+                <td><input name="time_min_{{ i }}" type="number"
+                           class="form-control form-control-sm" value="{{ rh.time_min }}"
+                           oninput="recalculate()"></td>
+                <td><select name="hop_use_{{ i }}" class="form-select form-select-sm" onchange="recalculate()">
                   {% for u in ['Boil','Dry Hop','First Wort','Aroma','Mash'] %}
                   <option {{ 'selected' if rh.use == u }}>{{ u }}</option>
                   {% endfor %}
                 </select></td>
-                <td><select name="hop_form_{{ i }}" class="form-select form-select-sm">
+                <td><select name="hop_form_{{ i }}" class="form-select form-select-sm" onchange="recalculate()">
                   {% for f in ['Pellet','Plug','Leaf'] %}
                   <option {{ 'selected' if rh.form == f }}>{{ f }}</option>
                   {% endfor %}
                 </select></td>
-                <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)"><i class="bi bi-x"></i></button></td>
+                <td><button type="button" class="btn btn-sm btn-outline-danger"
+                            onclick="removeRow(this)"><i class="bi bi-x"></i></button></td>
               </tr>
               {% endfor %}
               {% endif %}
@@ -181,33 +223,41 @@
         </div>
       </div>
 
-      <!-- ── Yeast ──────────────────────────────────────────────────── -->
+      <!-- Yeast -->
       <div class="card mb-4">
         <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
           <span><i class="bi bi-droplet me-2"></i>Yeast</span>
-          <button type="button" class="btn btn-brew btn-sm"
-                  onclick="addIngredientRow('yeast')">
+          <button type="button" class="btn btn-brew btn-sm" onclick="addIngredientRow('yeast')">
             <i class="bi bi-plus-lg me-1"></i>Add
           </button>
         </div>
         <div class="table-responsive">
           <table class="table table-sm mb-0 ingredient-table">
-            <thead>
-              <tr>
-                <th style="min-width:200px;">Yeast</th>
-                <th style="width:130px;">Amount (packets)</th>
-                <th style="width:44px;"></th>
-              </tr>
-            </thead>
+            <thead><tr>
+              <th style="min-width:200px;">Yeast</th>
+              <th style="width:130px;">Amount (packets)</th>
+              <th style="width:44px;"></th>
+            </tr></thead>
             <tbody id="yeasts-tbody">
               {% if recipe %}
               {% for i, ry in recipe.yeasts|enumerate %}
               <tr data-row-type="yeast">
-                <td><select name="yeast_id_{{ i }}" class="form-select form-select-sm" required>
-                  <option value="{{ ry.yeast.id }}" selected>{{ ry.yeast.name }}{% if ry.yeast.lab %} ({{ ry.yeast.lab }}){% endif %}</option>
-                </select></td>
-                <td><input name="yeast_amount_{{ i }}" type="number" step="0.5" class="form-control form-control-sm" value="{{ ry.amount }}"></td>
-                <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)"><i class="bi bi-x"></i></button></td>
+                <td>
+                  <select name="yeast_id_{{ i }}" class="form-select form-select-sm ingredient-select"
+                          required onchange="recalculate()">
+                    <option value="">— Select —</option>
+                    {% for y in all_yeasts %}
+                    <option value="{{ y.id }}" data-attenuation="{{ y.attenuation_pct }}"
+                            {{ 'selected' if y.id == ry.yeast_id }}>
+                      {{ y.name }}{% if y.lab %} — {{ y.lab }}{% endif %}
+                    </option>
+                    {% endfor %}
+                  </select>
+                </td>
+                <td><input name="yeast_amount_{{ i }}" type="number" step="0.5"
+                           class="form-control form-control-sm" value="{{ ry.amount }}"></td>
+                <td><button type="button" class="btn btn-sm btn-outline-danger"
+                            onclick="removeRow(this)"><i class="bi bi-x"></i></button></td>
               </tr>
               {% endfor %}
               {% endif %}
@@ -219,41 +269,48 @@
         </div>
       </div>
 
-      <!-- ── Misc ───────────────────────────────────────────────────── -->
+      <!-- Miscellaneous -->
       <div class="card mb-4">
         <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
           <span><i class="bi bi-plus-circle me-2"></i>Miscellaneous</span>
-          <button type="button" class="btn btn-brew btn-sm"
-                  onclick="addIngredientRow('misc')">
+          <button type="button" class="btn btn-brew btn-sm" onclick="addIngredientRow('misc')">
             <i class="bi bi-plus-lg me-1"></i>Add
           </button>
         </div>
         <div class="table-responsive">
           <table class="table table-sm mb-0 ingredient-table">
-            <thead>
-              <tr>
-                <th style="min-width:160px;">Item</th>
-                <th style="width:90px;">Amount</th>
-                <th style="width:80px;">Use</th>
-                <th style="width:85px;">Time (min)</th>
-                <th style="width:44px;"></th>
-              </tr>
-            </thead>
+            <thead><tr>
+              <th style="min-width:160px;">Item</th>
+              <th style="width:90px;">Amount</th>
+              <th style="width:100px;">Use</th>
+              <th style="width:85px;">Time (min)</th>
+              <th style="width:44px;"></th>
+            </tr></thead>
             <tbody id="miscs-tbody">
               {% if recipe %}
               {% for i, rm in recipe.miscs|enumerate %}
               <tr data-row-type="misc">
-                <td><select name="misc_id_{{ i }}" class="form-select form-select-sm" required>
-                  <option value="{{ rm.misc.id }}" selected>{{ rm.misc.name }}</option>
-                </select></td>
-                <td><input name="misc_amount_{{ i }}" type="number" step="0.1" class="form-control form-control-sm" value="{{ rm.amount }}"></td>
+                <td>
+                  <select name="misc_id_{{ i }}" class="form-select form-select-sm" required>
+                    <option value="">— Select —</option>
+                    {% for m in all_miscs %}
+                    <option value="{{ m.id }}" {{ 'selected' if m.id == rm.misc_id }}>
+                      {{ m.name }}{% if m.type %} ({{ m.type }}){% endif %}
+                    </option>
+                    {% endfor %}
+                  </select>
+                </td>
+                <td><input name="misc_amount_{{ i }}" type="number" step="0.1"
+                           class="form-control form-control-sm" value="{{ rm.amount }}"></td>
                 <td><select name="misc_use_{{ i }}" class="form-select form-select-sm">
                   {% for u in ['Boil','Mash','Primary','Secondary','Bottling'] %}
                   <option {{ 'selected' if rm.use == u }}>{{ u }}</option>
                   {% endfor %}
                 </select></td>
-                <td><input name="misc_time_{{ i }}" type="number" class="form-control form-control-sm" value="{{ rm.time_min }}"></td>
-                <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)"><i class="bi bi-x"></i></button></td>
+                <td><input name="misc_time_{{ i }}" type="number"
+                           class="form-control form-control-sm" value="{{ rm.time_min }}"></td>
+                <td><button type="button" class="btn btn-sm btn-outline-danger"
+                            onclick="removeRow(this)"><i class="bi bi-x"></i></button></td>
               </tr>
               {% endfor %}
               {% endif %}
@@ -264,42 +321,64 @@
           No misc additions yet
         </div>
       </div>
-    </div>
+    </div><!-- /col-lg-8 -->
 
-    <!-- ── Notes sidebar ────────────────────��────────────────────────── -->
+    <!-- ── Sidebar ──────────────────────────────────────────────────── -->
     <div class="col-lg-4">
+
+      <!-- Estimated Stats card (sticky) -->
       <div class="card mb-3 sticky-top" style="top: 75px;">
-        <div class="card-header fw-semibold">Targets & Notes</div>
+        <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+          <span>Estimated Stats</span>
+          <button type="button" id="units-btn"
+                  class="btn btn-sm btn-outline-secondary py-0 px-2"
+                  onclick="toggleUnits()">Metric</button>
+        </div>
         <div class="card-body">
           <div class="row g-2 mb-3">
             <div class="col-6">
               <label class="form-label small">OG</label>
-              <input type="number" name="og" step="0.001" class="form-control form-control-sm"
-                     value="{{ recipe.og if recipe and recipe.og else '' }}" placeholder="1.050">
+              <input type="number" name="og" id="calc_og" step="0.001"
+                     class="form-control form-control-sm"
+                     value="{{ recipe.og if recipe and recipe.og else '' }}"
+                     placeholder="1.050" readonly>
             </div>
             <div class="col-6">
               <label class="form-label small">FG</label>
-              <input type="number" name="fg" step="0.001" class="form-control form-control-sm"
-                     value="{{ recipe.fg if recipe and recipe.fg else '' }}" placeholder="1.010">
+              <input type="number" name="fg" id="calc_fg" step="0.001"
+                     class="form-control form-control-sm"
+                     value="{{ recipe.fg if recipe and recipe.fg else '' }}"
+                     placeholder="1.010" readonly>
             </div>
             <div class="col-6">
               <label class="form-label small">ABV (%)</label>
-              <input type="number" name="abv" step="0.1" class="form-control form-control-sm"
-                     value="{{ recipe.abv if recipe and recipe.abv else '' }}" placeholder="5.2">
+              <input type="number" name="abv" id="calc_abv" step="0.1"
+                     class="form-control form-control-sm"
+                     value="{{ recipe.abv if recipe and recipe.abv else '' }}"
+                     placeholder="5.2" readonly>
             </div>
             <div class="col-6">
               <label class="form-label small">IBU</label>
-              <input type="number" name="ibu" step="1" class="form-control form-control-sm"
-                     value="{{ recipe.ibu|int if recipe and recipe.ibu else '' }}" placeholder="40">
+              <input type="number" name="ibu" id="calc_ibu" step="1"
+                     class="form-control form-control-sm"
+                     value="{{ recipe.ibu|int if recipe and recipe.ibu else '' }}"
+                     placeholder="40" readonly>
             </div>
             <div class="col-6">
               <label class="form-label small">Color (SRM)</label>
-              <input type="number" name="color_srm" step="0.1" class="form-control form-control-sm"
-                     value="{{ recipe.color_srm if recipe and recipe.color_srm else '' }}" placeholder="8">
+              <input type="number" name="color_srm" id="calc_srm" step="0.1"
+                     class="form-control form-control-sm"
+                     value="{{ recipe.color_srm if recipe and recipe.color_srm else '' }}"
+                     placeholder="8" readonly>
+            </div>
+            <div class="col-6">
+              <label class="form-label small">Color</label>
+              <div id="srm_chip" class="rounded border d-flex align-items-center justify-content-center fw-bold small"
+                   style="height:31px; background:#f5f0e8; color:#333;">—</div>
             </div>
           </div>
           <label class="form-label">Notes</label>
-          <textarea name="notes" class="form-control" rows="6"
+          <textarea name="notes" class="form-control" rows="5"
                     placeholder="Process notes, water chemistry, tasting notes…">{{ recipe.notes if recipe and recipe.notes else '' }}</textarea>
         </div>
         <div class="card-footer d-flex gap-2">
@@ -310,17 +389,296 @@
              class="btn btn-outline-secondary">Cancel</a>
         </div>
       </div>
-    </div>
+
+      <!-- Style Targets card (non-sticky, shown when style selected) -->
+      <div id="style-targets-card" class="card mb-3" style="display:none;">
+        <div class="card-header fw-semibold small d-flex align-items-center gap-2">
+          <i class="bi bi-bullseye"></i>
+          <span>Style Targets: <span id="style-targets-name" class="fw-bold"></span></span>
+        </div>
+        <div class="card-body py-2 px-3">
+          <div id="gauge-og"></div>
+          <div id="gauge-fg"></div>
+          <div id="gauge-abv"></div>
+          <div id="gauge-ibu"></div>
+          <div id="gauge-srm"></div>
+        </div>
+      </div>
+
+    </div><!-- /col-lg-4 -->
   </div>
 </form>
 {% endblock %}
 
 {% block scripts %}
 <script>
-// Pre-populate row counters from existing rows
+// ── Row counters ──────────────────────────────────────────────────────────────
 _rowCounters['fermentable'] = document.querySelectorAll('[data-row-type="fermentable"]').length;
 _rowCounters['hop']         = document.querySelectorAll('[data-row-type="hop"]').length;
 _rowCounters['yeast']       = document.querySelectorAll('[data-row-type="yeast"]').length;
 _rowCounters['misc']        = document.querySelectorAll('[data-row-type="misc"]').length;
+
+// Override removeRow to trigger recalculate
+const _baseRemove = window.removeRow;
+window.removeRow = function(btn) { _baseRemove(btn); recalculate(); };
+
+// ── Unit system ───────────────────────────────────────────────────────────────
+let brewUnits = localStorage.getItem('brewbot_units') || 'metric';
+
+const L2G  = v => v * 0.264172,  G2L  = v => v / 0.264172;
+const KG2LB = v => v * 2.20462,  LB2KG = v => v / 2.20462;
+const G2OZ  = v => v * 0.035274, OZ2G  = v => v / 0.035274;
+
+function toggleUnits() {
+  const next = brewUnits === 'metric' ? 'imperial' : 'metric';
+  convertFormUnits(brewUnits, next);
+  brewUnits = next;
+  localStorage.setItem('brewbot_units', brewUnits);
+  syncUnitLabels();
+  recalculate();
+}
+
+function convertFormUnits(from, to) {
+  if (from === to) return;
+  const imp = to === 'imperial';
+  document.querySelectorAll('[data-utype="vol"]').forEach(el => {
+    if (el.value === '') return;
+    el.value = imp ? L2G(+el.value).toFixed(2) : G2L(+el.value).toFixed(1);
+  });
+  document.querySelectorAll('[data-utype="kg"]').forEach(el => {
+    if (el.value === '') return;
+    el.value = imp ? KG2LB(+el.value).toFixed(2) : LB2KG(+el.value).toFixed(3);
+  });
+  document.querySelectorAll('[data-utype="g"]').forEach(el => {
+    if (el.value === '') return;
+    el.value = imp ? G2OZ(+el.value).toFixed(2) : OZ2G(+el.value).toFixed(1);
+  });
+}
+
+function syncUnitLabels() {
+  const imp = brewUnits === 'imperial';
+  document.querySelectorAll('[data-ulabel]').forEach(el => {
+    el.textContent = imp ? el.dataset.ulabel.split('|')[1] : el.dataset.ulabel.split('|')[0];
+  });
+  const btn = document.getElementById('units-btn');
+  if (btn) btn.textContent = imp ? 'Imperial' : 'Metric';
+}
+
+function applyCurrentUnits() {
+  if (brewUnits === 'imperial') {
+    convertFormUnits('metric', 'imperial');
+  }
+  syncUnitLabels();
+}
+
+// ── Equipment profile auto-fill ───────────────────────────────────────────────
+function applyEquipmentProfile(sel) {
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt.value) return;
+  const imp = brewUnits === 'imperial';
+  const batchL = +opt.dataset.batch, boilL = +opt.dataset.boil;
+  if (batchL) document.getElementById('batch_size_l').value  = imp ? L2G(batchL).toFixed(2) : batchL;
+  if (boilL)  document.getElementById('boil_size_l').value   = imp ? L2G(boilL).toFixed(2)  : boilL;
+  if (opt.dataset.time) document.getElementById('boil_time_min').value = opt.dataset.time;
+  if (opt.dataset.efficiency) document.getElementById('efficiency').value = opt.dataset.efficiency;
+  recalculate();
+}
+
+// ── Fermentable default amounts ───────────────────────────────────────────────
+function fermentableSelected(sel) {
+  const row = sel.closest('tr');
+  const amtInput = row.querySelector('[data-utype="kg"]');
+  if (amtInput && (!amtInput.value || +amtInput.value === 0)) {
+    const opt = sel.options[sel.selectedIndex];
+    if (opt.value) {
+      const color = parseFloat(opt.dataset.color) || 0;
+      const ftype = opt.dataset.type || 'Grain';
+      let defaultKg;
+      if (ftype === 'Sugar' || ftype === 'Extract' || ftype === 'Dry Extract') defaultKg = 0.5;
+      else if (color <= 15) defaultKg = 4.0;
+      else if (color <= 80) defaultKg = 0.4;
+      else defaultKg = 0.2;
+      amtInput.value = brewUnits === 'imperial'
+        ? KG2LB(defaultKg).toFixed(2)
+        : defaultKg.toFixed(2);
+    }
+  }
+  recalculate();
+}
+
+// ── Brewing math ──────────────────────────────────────────────────────────────
+function recalculate() {
+  const imp = brewUnits === 'imperial';
+
+  const batchRaw = parseFloat(document.getElementById('batch_size_l').value) || (imp ? 5 : 19);
+  const batchL   = imp ? G2L(batchRaw) : batchRaw;
+  const batchGal = batchL * 0.264172;
+  const boilMin  = parseInt(document.getElementById('boil_time_min').value) || 60;
+  const eff      = (parseFloat(document.getElementById('efficiency').value) || 75) / 100;
+
+  // OG + SRM from fermentables
+  let ogPts = 0, mcu = 0;
+  document.querySelectorAll('[data-row-type="fermentable"]').forEach(row => {
+    const sel      = row.querySelector('select.ingredient-select');
+    const amtInput = row.querySelector('[data-utype="kg"]');
+    const afterBoil = row.querySelector('input[type=checkbox]')?.checked;
+    if (!sel?.value || !amtInput?.value) return;
+    const opt    = sel.options[sel.selectedIndex];
+    const amtKg  = imp ? LB2KG(+amtInput.value) : +amtInput.value;
+    const lbs    = amtKg * 2.20462;
+    const ppg    = (parseFloat(opt.dataset.potential) - 1.0) * 1000;
+    const ftype  = opt.dataset.type || 'Grain';
+    const eAdj   = (ftype==='Sugar'||ftype==='Extract'||ftype==='Dry Extract'||afterBoil) ? 1.0 : eff;
+    ogPts += ppg * lbs * eAdj / batchGal;
+    mcu   += (parseFloat(opt.dataset.color)||0) * lbs / batchGal;
+  });
+  const og = 1.0 + ogPts / 1000;
+
+  // FG from yeast attenuation
+  const attns = [];
+  document.querySelectorAll('[data-row-type="yeast"]').forEach(row => {
+    const sel = row.querySelector('select.ingredient-select');
+    if (!sel?.value) return;
+    attns.push(parseFloat(sel.options[sel.selectedIndex].dataset.attenuation) || 75);
+  });
+  const attn = attns.length ? attns.reduce((a,b)=>a+b,0)/attns.length : 75;
+  const fg = 1.0 + (og - 1.0) * (1.0 - attn/100);
+
+  // IBU via Tinseth
+  let ibu = 0;
+  document.querySelectorAll('[data-row-type="hop"]').forEach(row => {
+    const sel      = row.querySelector('select.ingredient-select');
+    const amtInput = row.querySelector('[data-utype="g"]');
+    const selects  = row.querySelectorAll('select');
+    const useEl    = selects[1], formEl = selects[2];
+    const timeEl   = row.querySelectorAll('input[type=number]')[1];
+    if (!sel?.value || !amtInput?.value) return;
+    const use = useEl?.value || 'Boil';
+    if (use === 'Dry Hop') return;
+    let time = parseInt(timeEl?.value) || 0;
+    if (use === 'First Wort') time = boilMin;
+    if (use === 'Aroma' && time === 0) return;
+    const opt    = sel.options[sel.selectedIndex];
+    const amtG   = imp ? OZ2G(+amtInput.value) : +amtInput.value;
+    const alpha  = (parseFloat(opt.dataset.alpha)||0) / 100;
+    const form   = formEl?.value || 'Pellet';
+    const big    = 1.65 * Math.pow(0.000125, og - 1.0);
+    const bf     = (1.0 - Math.exp(-0.04 * time)) / 4.15;
+    let util     = big * bf;
+    if (form === 'Pellet') util *= 1.1;
+    ibu += alpha * util * (amtG * 0.035274) * 7489 / batchGal;
+  });
+
+  // SRM via Morey
+  const srm = mcu > 0 ? 1.4922 * Math.pow(mcu, 0.6859) : 0;
+  const abv = (og - fg) * 131.25;
+
+  // Write stats
+  document.getElementById('calc_og').value  = og  > 1    ? og.toFixed(3)  : '';
+  document.getElementById('calc_fg').value  = fg  > 1    ? fg.toFixed(3)  : '';
+  document.getElementById('calc_abv').value = abv > 0    ? abv.toFixed(1) : '';
+  document.getElementById('calc_ibu').value = ibu > 0    ? Math.round(ibu): '';
+  document.getElementById('calc_srm').value = srm > 0    ? srm.toFixed(1) : '';
+
+  // SRM color chip
+  const chip = document.getElementById('srm_chip');
+  if (srm > 0) {
+    const hex = srmColor(srm);
+    chip.style.background = hex;
+    chip.style.color = srm > 20 ? '#eee' : '#333';
+    chip.textContent = srm.toFixed(1) + ' SRM';
+  } else {
+    chip.style.background = '#f5f0e8';
+    chip.style.color = '#333';
+    chip.textContent = '—';
+  }
+
+  updateStyleTargets();
+}
+
+// ── Style target gauges ───────────────────────────────────────────────────────
+function renderGauge(id, label, value, lo, hi, fmt, suffix) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (!lo || !hi) { el.innerHTML = ''; return; }
+
+  const pad   = Math.max((hi - lo) * 0.4, 0.001);
+  const fmin  = lo - pad, fmax = hi + pad, frange = fmax - fmin;
+  const loPct = ((lo - fmin) / frange * 100).toFixed(1);
+  const wPct  = ((hi - lo)  / frange * 100).toFixed(1);
+
+  let markerPct = null, cls = 'secondary', badge = '—';
+  if (value !== null && !isNaN(value) && value > 0) {
+    markerPct = Math.max(1, Math.min(99, (value - fmin) / frange * 100)).toFixed(1);
+    if (value >= lo && value <= hi) {
+      cls = 'success'; badge = fmt(value) + suffix + ' ✓';
+    } else {
+      const gap = value < lo ? lo - value : value - hi;
+      cls = gap / (hi - lo) > 0.4 ? 'danger' : 'warning';
+      badge = fmt(value) + suffix + (value < lo ? ' ▼ low' : ' ▲ high');
+    }
+  }
+
+  const markerColor = cls==='success' ? '#198754' : cls==='warning' ? '#e6a817' : '#dc3545';
+
+  el.innerHTML = `
+    <div class="mb-3">
+      <div class="d-flex justify-content-between align-items-center mb-1">
+        <span class="small fw-semibold" style="letter-spacing:.03em;">${label}</span>
+        <span class="badge text-bg-${cls} small">${badge}</span>
+      </div>
+      <div class="position-relative rounded" style="height:8px;background:#dee2e6;overflow:visible;">
+        <div class="position-absolute h-100 rounded"
+             style="left:${loPct}%;width:${wPct}%;background:rgba(25,135,84,.3);"></div>
+        ${markerPct !== null ? `<div class="position-absolute" style="left:${markerPct}%;top:-4px;
+             width:3px;height:16px;background:${markerColor};transform:translateX(-50%);
+             border-radius:2px;box-shadow:0 1px 4px rgba(0,0,0,.35);"></div>` : ''}
+      </div>
+      <div class="d-flex justify-content-between mt-1" style="font-size:.68rem;color:#adb5bd;">
+        <span>${fmt(lo)}${suffix}</span><span>${fmt(hi)}${suffix}</span>
+      </div>
+    </div>`;
+}
+
+function updateStyleTargets() {
+  const sel  = document.querySelector('[name="style_id"]');
+  const card = document.getElementById('style-targets-card');
+  if (!card || !sel) return;
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt?.value || !opt.dataset.ogMin) { card.style.display = 'none'; return; }
+
+  card.style.display = '';
+  document.getElementById('style-targets-name').textContent =
+    opt.textContent.trim().replace(/\s*\(.*\)$/, '');
+
+  const og  = parseFloat(document.getElementById('calc_og').value)  || null;
+  const fg  = parseFloat(document.getElementById('calc_fg').value)  || null;
+  const abv = parseFloat(document.getElementById('calc_abv').value) || null;
+  const ibu = parseFloat(document.getElementById('calc_ibu').value) || null;
+  const srm = parseFloat(document.getElementById('calc_srm').value) || null;
+
+  renderGauge('gauge-og',  'OG',       og,  +opt.dataset.ogMin,  +opt.dataset.ogMax,  v=>v.toFixed(3), '');
+  renderGauge('gauge-fg',  'FG',       fg,  +opt.dataset.fgMin,  +opt.dataset.fgMax,  v=>v.toFixed(3), '');
+  renderGauge('gauge-abv', 'ABV',      abv, +opt.dataset.abvMin, +opt.dataset.abvMax, v=>v.toFixed(1), '%');
+  renderGauge('gauge-ibu', 'IBU',      ibu, +opt.dataset.ibuMin, +opt.dataset.ibuMax, v=>Math.round(v),'');
+  renderGauge('gauge-srm', 'SRM',      srm, +opt.dataset.srmMin, +opt.dataset.srmMax, v=>v.toFixed(1), '');
+}
+
+// ── Convert back to metric on submit ─────────────────────────────────────────
+document.getElementById('recipe-form').addEventListener('submit', () => {
+  if (brewUnits === 'imperial') convertFormUnits('imperial', 'metric');
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  applyCurrentUnits();
+  recalculate();
+});
+
+document.body.addEventListener('htmx:afterSwap', () => {
+  // Apply units to newly inserted rows, then recalc
+  if (brewUnits === 'imperial') syncUnitLabels();
+  recalculate();
+});
 </script>
 {% endblock %}

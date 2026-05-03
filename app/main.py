@@ -5,9 +5,10 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app.database import engine
+from app.database import engine, SessionLocal
 from app.models import Base
 from app.services import mqtt as mqtt_service
+import app.seed as seed_module
 
 # API routes
 from app.routes.recipes import router as recipes_router
@@ -24,6 +25,11 @@ from app.routes.web import router as web_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        seed_module.run(db)
+    finally:
+        db.close()
     mqtt_task = asyncio.create_task(mqtt_service.run())
     yield
     mqtt_task.cancel()

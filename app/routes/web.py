@@ -15,11 +15,23 @@ from app.models.misc import Misc
 from app.models.recipe import Recipe, RecipeFermentable, RecipeHop, RecipeMisc, RecipeYeast
 from app.models.style import Style
 from app.models.yeast import Yeast
+from app.services import calc as calc_service
 
 TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 router = APIRouter(include_in_schema=False)
+
+
+def _form_context(db: Session) -> dict:
+    return {
+        "styles": db.query(Style).order_by(Style.name).all(),
+        "equipment_list": db.query(Equipment).order_by(Equipment.name).all(),
+        "all_fermentables": db.query(Fermentable).order_by(Fermentable.name).all(),
+        "all_hops": db.query(Hop).order_by(Hop.name).all(),
+        "all_yeasts": db.query(Yeast).order_by(Yeast.name).all(),
+        "all_miscs": db.query(Misc).order_by(Misc.name).all(),
+    }
 
 
 def _parse_ingredients(form):
@@ -72,8 +84,7 @@ def _parse_ingredients(form):
 
 @router.get("/", response_class=HTMLResponse)
 def dashboard(request: Request, db: Session = Depends(get_db)):
-    return templates.TemplateResponse("dashboard.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "dashboard.html", {
         "devices": db.query(Device).order_by(Device.role).all(),
         "recent_recipes": db.query(Recipe).order_by(Recipe.created_at.desc()).limit(6).all(),
         "active_sessions": db.query(BrewSession).filter(
@@ -90,8 +101,7 @@ def recipes_list(request: Request, q: str = "", db: Session = Depends(get_db)):
     query = db.query(Recipe)
     if q:
         query = query.filter(Recipe.name.ilike(f"%{q}%"))
-    return templates.TemplateResponse("recipes/list.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "recipes/list.html", {
         "recipes": query.order_by(Recipe.created_at.desc()).all(),
         "q": q,
         "page": "recipes",
@@ -100,12 +110,8 @@ def recipes_list(request: Request, q: str = "", db: Session = Depends(get_db)):
 
 @router.get("/recipes/new", response_class=HTMLResponse)
 def recipe_new(request: Request, db: Session = Depends(get_db)):
-    return templates.TemplateResponse("recipes/form.html", {
-        "request": request,
-        "recipe": None,
-        "styles": db.query(Style).order_by(Style.name).all(),
-        "equipment_list": db.query(Equipment).order_by(Equipment.name).all(),
-        "page": "recipes",
+    return templates.TemplateResponse(request, "recipes/form.html", {
+        "recipe": None, "page": "recipes", **_form_context(db),
     })
 
 
@@ -114,12 +120,8 @@ def recipe_edit(recipe_id: int, request: Request, db: Session = Depends(get_db))
     recipe = db.get(Recipe, recipe_id)
     if not recipe:
         return RedirectResponse("/recipes", status_code=303)
-    return templates.TemplateResponse("recipes/form.html", {
-        "request": request,
-        "recipe": recipe,
-        "styles": db.query(Style).order_by(Style.name).all(),
-        "equipment_list": db.query(Equipment).order_by(Equipment.name).all(),
-        "page": "recipes",
+    return templates.TemplateResponse(request, "recipes/form.html", {
+        "recipe": recipe, "page": "recipes", **_form_context(db),
     })
 
 
@@ -128,8 +130,7 @@ def recipe_detail(recipe_id: int, request: Request, db: Session = Depends(get_db
     recipe = db.get(Recipe, recipe_id)
     if not recipe:
         return RedirectResponse("/recipes", status_code=303)
-    return templates.TemplateResponse("recipes/detail.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "recipes/detail.html", {
         "recipe": recipe,
         "page": "recipes",
     })
@@ -161,6 +162,9 @@ async def recipe_create(request: Request, db: Session = Depends(get_db)):
         db.add(RecipeYeast(recipe_id=recipe.id, **y))
     for m in miscs:
         db.add(RecipeMisc(recipe_id=recipe.id, **m))
+    db.flush()
+    db.refresh(recipe)
+    calc_service.calculate(recipe)
     db.commit()
     return RedirectResponse(f"/recipes/{recipe.id}", status_code=303)
 
@@ -194,6 +198,9 @@ async def recipe_update(recipe_id: int, request: Request, db: Session = Depends(
         db.add(RecipeYeast(recipe_id=recipe.id, **y))
     for m in miscs:
         db.add(RecipeMisc(recipe_id=recipe.id, **m))
+    db.flush()
+    db.refresh(recipe)
+    calc_service.calculate(recipe)
     db.commit()
     return RedirectResponse(f"/recipes/{recipe.id}", status_code=303)
 
@@ -211,8 +218,7 @@ def recipe_delete(recipe_id: int, db: Session = Depends(get_db)):
 
 @router.get("/equipment", response_class=HTMLResponse)
 def equipment_list(request: Request, db: Session = Depends(get_db)):
-    return templates.TemplateResponse("equipment/list.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "equipment/list.html", {
         "equipment_list": db.query(Equipment).order_by(Equipment.name).all(),
         "page": "equipment",
     })
@@ -247,23 +253,201 @@ def equipment_delete(equip_id: int, db: Session = Depends(get_db)):
 
 @router.get("/ingredients", response_class=HTMLResponse)
 def ingredients_list(request: Request, tab: str = "fermentables", db: Session = Depends(get_db)):
-    return templates.TemplateResponse("ingredients/list.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "ingredients/list.html", {
         "fermentables": db.query(Fermentable).order_by(Fermentable.name).all(),
         "hops": db.query(Hop).order_by(Hop.name).all(),
         "yeasts": db.query(Yeast).order_by(Yeast.name).all(),
         "miscs": db.query(Misc).order_by(Misc.name).all(),
         "tab": tab,
         "page": "ingredients",
+        "error": request.query_params.get("error"),
     })
+
+
+def _in_use_error(name: str, tab: str) -> RedirectResponse:
+    msg = f"{name} is used in one or more recipes and cannot be deleted."
+    return RedirectResponse(f"/ingredients?tab={tab}&error={msg}", status_code=303)
+
+
+# Fermentables
+@router.post("/ingredients/fermentables/create")
+async def fermentable_create(request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    db.add(Fermentable(
+        name=form["name"], type=form.get("type", "Grain"),
+        origin=form.get("origin") or None,
+        color_srm=float(form.get("color_srm") or 0),
+        potential=float(form.get("potential") or 1.037),
+        yield_pct=float(form.get("yield_pct") or 75),
+        recommend_mash=form.get("recommend_mash") == "1",
+        notes=form.get("notes") or None,
+    ))
+    db.commit()
+    return RedirectResponse("/ingredients?tab=fermentables", status_code=303)
+
+
+@router.post("/ingredients/fermentables/{item_id}/update")
+async def fermentable_update(item_id: int, request: Request, db: Session = Depends(get_db)):
+    item = db.get(Fermentable, item_id)
+    if not item:
+        return RedirectResponse("/ingredients?tab=fermentables", status_code=303)
+    form = await request.form()
+    item.name = form["name"]; item.type = form.get("type", "Grain")
+    item.origin = form.get("origin") or None
+    item.color_srm = float(form.get("color_srm") or 0)
+    item.potential = float(form.get("potential") or 1.037)
+    item.yield_pct = float(form.get("yield_pct") or 75)
+    item.recommend_mash = form.get("recommend_mash") == "1"
+    item.notes = form.get("notes") or None
+    db.commit()
+    return RedirectResponse("/ingredients?tab=fermentables", status_code=303)
+
+
+@router.post("/ingredients/fermentables/{item_id}/delete")
+def fermentable_delete(item_id: int, db: Session = Depends(get_db)):
+    item = db.get(Fermentable, item_id)
+    if not item:
+        return RedirectResponse("/ingredients?tab=fermentables", status_code=303)
+    if db.query(RecipeFermentable).filter_by(fermentable_id=item_id).count():
+        return _in_use_error(item.name, "fermentables")
+    db.delete(item); db.commit()
+    return RedirectResponse("/ingredients?tab=fermentables", status_code=303)
+
+
+# Hops
+@router.post("/ingredients/hops/create")
+async def hop_create(request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    db.add(Hop(
+        name=form["name"], origin=form.get("origin") or None,
+        type=form.get("type") or None,
+        alpha_pct=float(form.get("alpha_pct") or 0),
+        beta_pct=float(form.get("beta_pct")) if form.get("beta_pct") else None,
+        notes=form.get("notes") or None,
+        substitutes=form.get("substitutes") or None,
+    ))
+    db.commit()
+    return RedirectResponse("/ingredients?tab=hops", status_code=303)
+
+
+@router.post("/ingredients/hops/{item_id}/update")
+async def hop_update(item_id: int, request: Request, db: Session = Depends(get_db)):
+    item = db.get(Hop, item_id)
+    if not item:
+        return RedirectResponse("/ingredients?tab=hops", status_code=303)
+    form = await request.form()
+    item.name = form["name"]; item.origin = form.get("origin") or None
+    item.type = form.get("type") or None
+    item.alpha_pct = float(form.get("alpha_pct") or 0)
+    item.beta_pct = float(form.get("beta_pct")) if form.get("beta_pct") else None
+    item.notes = form.get("notes") or None
+    item.substitutes = form.get("substitutes") or None
+    db.commit()
+    return RedirectResponse("/ingredients?tab=hops", status_code=303)
+
+
+@router.post("/ingredients/hops/{item_id}/delete")
+def hop_delete(item_id: int, db: Session = Depends(get_db)):
+    item = db.get(Hop, item_id)
+    if not item:
+        return RedirectResponse("/ingredients?tab=hops", status_code=303)
+    if db.query(RecipeHop).filter_by(hop_id=item_id).count():
+        return _in_use_error(item.name, "hops")
+    db.delete(item); db.commit()
+    return RedirectResponse("/ingredients?tab=hops", status_code=303)
+
+
+# Yeasts
+@router.post("/ingredients/yeasts/create")
+async def yeast_create(request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    db.add(Yeast(
+        name=form["name"], lab=form.get("lab") or None,
+        product_id=form.get("product_id") or None,
+        type=form.get("type") or None, form=form.get("form") or None,
+        attenuation_pct=float(form.get("attenuation_pct") or 75),
+        min_temp_c=float(form.get("min_temp_c")) if form.get("min_temp_c") else None,
+        max_temp_c=float(form.get("max_temp_c")) if form.get("max_temp_c") else None,
+        flocculation=form.get("flocculation") or None,
+        best_for=form.get("best_for") or None,
+        notes=form.get("notes") or None,
+    ))
+    db.commit()
+    return RedirectResponse("/ingredients?tab=yeasts", status_code=303)
+
+
+@router.post("/ingredients/yeasts/{item_id}/update")
+async def yeast_update(item_id: int, request: Request, db: Session = Depends(get_db)):
+    item = db.get(Yeast, item_id)
+    if not item:
+        return RedirectResponse("/ingredients?tab=yeasts", status_code=303)
+    form = await request.form()
+    item.name = form["name"]; item.lab = form.get("lab") or None
+    item.product_id = form.get("product_id") or None
+    item.type = form.get("type") or None; item.form = form.get("form") or None
+    item.attenuation_pct = float(form.get("attenuation_pct") or 75)
+    item.min_temp_c = float(form.get("min_temp_c")) if form.get("min_temp_c") else None
+    item.max_temp_c = float(form.get("max_temp_c")) if form.get("max_temp_c") else None
+    item.flocculation = form.get("flocculation") or None
+    item.best_for = form.get("best_for") or None
+    item.notes = form.get("notes") or None
+    db.commit()
+    return RedirectResponse("/ingredients?tab=yeasts", status_code=303)
+
+
+@router.post("/ingredients/yeasts/{item_id}/delete")
+def yeast_delete(item_id: int, db: Session = Depends(get_db)):
+    item = db.get(Yeast, item_id)
+    if not item:
+        return RedirectResponse("/ingredients?tab=yeasts", status_code=303)
+    if db.query(RecipeYeast).filter_by(yeast_id=item_id).count():
+        return _in_use_error(item.name, "yeasts")
+    db.delete(item); db.commit()
+    return RedirectResponse("/ingredients?tab=yeasts", status_code=303)
+
+
+# Miscs
+@router.post("/ingredients/miscs/create")
+async def misc_create(request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    db.add(Misc(
+        name=form["name"], type=form.get("type") or None,
+        use_for=form.get("use_for") or None,
+        notes=form.get("notes") or None,
+    ))
+    db.commit()
+    return RedirectResponse("/ingredients?tab=miscs", status_code=303)
+
+
+@router.post("/ingredients/miscs/{item_id}/update")
+async def misc_update(item_id: int, request: Request, db: Session = Depends(get_db)):
+    item = db.get(Misc, item_id)
+    if not item:
+        return RedirectResponse("/ingredients?tab=miscs", status_code=303)
+    form = await request.form()
+    item.name = form["name"]; item.type = form.get("type") or None
+    item.use_for = form.get("use_for") or None
+    item.notes = form.get("notes") or None
+    db.commit()
+    return RedirectResponse("/ingredients?tab=miscs", status_code=303)
+
+
+@router.post("/ingredients/miscs/{item_id}/delete")
+def misc_delete(item_id: int, db: Session = Depends(get_db)):
+    item = db.get(Misc, item_id)
+    if not item:
+        return RedirectResponse("/ingredients?tab=miscs", status_code=303)
+    if db.query(RecipeMisc).filter_by(misc_id=item_id).count():
+        return _in_use_error(item.name, "miscs")
+    db.delete(item); db.commit()
+    return RedirectResponse("/ingredients?tab=miscs", status_code=303)
 
 
 # ── Devices / Controller ──────────────────────────────────────────────────────
 
 @router.get("/devices", response_class=HTMLResponse)
 def devices_page(request: Request, db: Session = Depends(get_db)):
-    return templates.TemplateResponse("devices/list.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "devices/list.html", {
         "devices": db.query(Device).order_by(Device.role).all(),
         "rigs": db.query(RigProfile).all(),
         "page": "devices",
@@ -298,8 +482,7 @@ def device_delete(device_id: int, db: Session = Depends(get_db)):
 
 @router.get("/brew-sessions", response_class=HTMLResponse)
 def brew_sessions_list(request: Request, db: Session = Depends(get_db)):
-    return templates.TemplateResponse("brew_sessions/list.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "brew_sessions/list.html", {
         "sessions": db.query(BrewSession).order_by(BrewSession.created_at.desc()).all(),
         "recipes": db.query(Recipe).order_by(Recipe.name).all(),
         "page": "brew_sessions",
@@ -322,31 +505,31 @@ async def brew_session_create(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/htmx/row/fermentable", response_class=HTMLResponse)
 def htmx_fermentable_row(index: int, request: Request, db: Session = Depends(get_db)):
-    return templates.TemplateResponse("partials/fermentable_row.html", {
-        "request": request, "index": index,
+    return templates.TemplateResponse(request, "partials/fermentable_row.html", {
+        "index": index,
         "fermentables": db.query(Fermentable).order_by(Fermentable.name).all(),
     })
 
 
 @router.get("/htmx/row/hop", response_class=HTMLResponse)
 def htmx_hop_row(index: int, request: Request, db: Session = Depends(get_db)):
-    return templates.TemplateResponse("partials/hop_row.html", {
-        "request": request, "index": index,
+    return templates.TemplateResponse(request, "partials/hop_row.html", {
+        "index": index,
         "hops": db.query(Hop).order_by(Hop.name).all(),
     })
 
 
 @router.get("/htmx/row/yeast", response_class=HTMLResponse)
 def htmx_yeast_row(index: int, request: Request, db: Session = Depends(get_db)):
-    return templates.TemplateResponse("partials/yeast_row.html", {
-        "request": request, "index": index,
+    return templates.TemplateResponse(request, "partials/yeast_row.html", {
+        "index": index,
         "yeasts": db.query(Yeast).order_by(Yeast.name).all(),
     })
 
 
 @router.get("/htmx/row/misc", response_class=HTMLResponse)
 def htmx_misc_row(index: int, request: Request, db: Session = Depends(get_db)):
-    return templates.TemplateResponse("partials/misc_row.html", {
-        "request": request, "index": index,
+    return templates.TemplateResponse(request, "partials/misc_row.html", {
+        "index": index,
         "miscs": db.query(Misc).order_by(Misc.name).all(),
     })

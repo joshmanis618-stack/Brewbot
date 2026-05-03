@@ -1,18 +1,25 @@
 <tr data-row-type="fermentable">
   <td>
-    <select name="fermentable_id_{{ index }}" class="form-select form-select-sm" required>
+    <select name="fermentable_id_{{ index }}" class="form-select form-select-sm ingredient-select"
+            required onchange="fermentableSelected(this)">
       <option value="">— Select —</option>
       {% for f in fermentables %}
-      <option value="{{ f.id }}">{{ f.name }} ({{ f.type }})</option>
+      <option value="{{ f.id }}"
+              data-potential="{{ f.potential }}"
+              data-yield="{{ f.yield_pct }}"
+              data-color="{{ f.color_srm }}"
+              data-type="{{ f.type }}">{{ f.name }} ({{ f.type }})</option>
       {% endfor %}
     </select>
   </td>
   <td>
     <input name="amount_kg_{{ index }}" type="number" step="0.01" min="0"
-           class="form-control form-control-sm" placeholder="kg" required>
+           class="form-control form-control-sm" data-utype="kg"
+           placeholder="kg" required oninput="recalculate()">
   </td>
   <td class="text-center">
-    <input name="add_after_boil_{{ index }}" type="checkbox" class="form-check-input" value="1">
+    <input name="add_after_boil_{{ index }}" type="checkbox" class="form-check-input"
+           value="1" onchange="recalculate()">
   </td>
   <td>
     <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)">
