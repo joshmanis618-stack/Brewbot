@@ -4,11 +4,9 @@
 {% block content %}
 <div class="page-header">
   <h1><i class="bi bi-clipboard-data me-2 text-warning"></i>Brew Sessions</h1>
-  {% if recipes %}
-  <button class="btn btn-brew" data-bs-toggle="modal" data-bs-target="#newSessionModal">
+  <a href="/brew-sessions/new" class="btn btn-brew">
     <i class="bi bi-plus-lg me-1"></i>New Session
-  </button>
-  {% endif %}
+  </a>
 </div>
 
 {% set status_colors = {
@@ -33,6 +31,7 @@
         <th class="text-end">ABV</th>
         <th class="text-end">Volume (L)</th>
         <th class="text-end">Efficiency</th>
+        <th></th>
       </tr>
     </thead>
     <tbody>
@@ -51,6 +50,11 @@
         <td class="text-end">{{ "%.1f"|format(s.actual_abv) + '%' if s.actual_abv else '—' }}</td>
         <td class="text-end">{{ s.actual_batch_size_l if s.actual_batch_size_l else '—' }}</td>
         <td class="text-end">{{ s.actual_efficiency|round|int|string + '%' if s.actual_efficiency else '—' }}</td>
+        <td class="text-end">
+          <a href="/brew-sessions/{{ s.id }}/run" class="btn btn-sm btn-outline-warning">
+            <i class="bi bi-play-fill me-1"></i>Run
+          </a>
+        </td>
       </tr>
       {% endfor %}
     </tbody>
@@ -63,9 +67,7 @@
     <p class="fw-semibold mb-1">No brew sessions yet</p>
     <p class="small text-muted mb-3">Start a session from any recipe page to begin logging your brew.</p>
     {% if recipes %}
-    <button class="btn btn-brew btn-sm" data-bs-toggle="modal" data-bs-target="#newSessionModal">
-      Start a Session
-    </button>
+    <a href="/brew-sessions/new" class="btn btn-brew btn-sm">Start a Session</a>
     {% else %}
     <a href="/recipes/new" class="btn btn-brew btn-sm">Create a Recipe First</a>
     {% endif %}
@@ -73,37 +75,4 @@
 </div>
 {% endif %}
 
-{% if recipes %}
-<div class="modal fade" id="newSessionModal" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <form method="post" action="/brew-sessions">
-        <div class="modal-header">
-          <h5 class="modal-title fw-bold">New Brew Session</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <div class="mb-3">
-            <label class="form-label">Recipe <span class="text-danger">*</span></label>
-            <select name="recipe_id" class="form-select" required>
-              <option value="">— Select a recipe —</option>
-              {% for r in recipes %}
-              <option value="{{ r.id }}">{{ r.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="mb-3">
-            <label class="form-label">Notes</label>
-            <textarea name="notes" class="form-control" rows="3" placeholder="Water chemistry, adjustments, …"></textarea>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-brew">Start Session</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-{% endif %}
 {% endblock %}

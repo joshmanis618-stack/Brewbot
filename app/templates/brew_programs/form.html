@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit ' + program.name if program else 'New Brew Program' }} — Brewbot{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <nav aria-label="breadcrumb"><ol class="breadcrumb mb-1 small">
+      <li class="breadcrumb-item"><a href="/brew-programs">Brew Programs</a></li>
+      <li class="breadcrumb-item active">{{ 'Edit' if program else 'New Program' }}</li>
+    </ol></nav>
+    <h1>{{ 'Edit ' + program.name if program else 'New Brew Program' }}</h1>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-6">
+
+    <div class="card mb-4">
+      <div class="card-header fw-semibold">Program Details</div>
+      <div class="card-body">
+        <form method="post"
+              action="{{ '/brew-programs/' + program.id|string + '/update' if program else '/brew-programs/create' }}">
+          <div class="mb-3">
+            <label class="form-label">Name <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" required
+                   value="{{ program.name if program else '' }}" placeholder="e.g. HERMS Mash Program">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Description</label>
+            <textarea name="description" class="form-control" rows="3"
+                      placeholder="Describe what this program does…">{{ program.description if program and program.description else '' }}</textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Linked Recipe <span class="text-muted small">(optional)</span></label>
+            <select name="recipe_id" class="form-select">
+              <option value="">— None (stand-alone) —</option>
+              {% for r in recipes %}
+              <option value="{{ r.id }}" {{ 'selected' if program and program.recipe_id == r.id }}>
+                {{ r.name }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-brew">
+              <i class="bi bi-check-lg me-1"></i>{{ 'Save Changes' if program else 'Create Program' }}
+            </button>
+            <a href="/brew-programs" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{% if program and program.id %}
+<div class="card">
+  <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-list-ol me-2"></i>Steps</span>
+    <span class="badge bg-secondary">{{ program.steps|length }} step{{ 's' if program.steps|length != 1 }}</span>
+  </div>
+
+  {% if program.steps %}
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th style="width:60px;">#</th>
+          <th>Name</th>
+          <th>Trigger</th>
+          <th style="width:44px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for step in program.steps %}
+        <tr>
+          <td class="text-muted fw-semibold">{{ step.step_number }}</td>
+          <td>
+            <div class="fw-semibold">{{ step.name }}</div>
+            {% if step.description %}
+            <small class="text-muted">{{ step.description }}</small>
+            {% endif %}
+          </td>
+          <td>
+            <span class="badge bg-secondary text-capitalize">{{ step.trigger_type }}</span>
+            {% if step.trigger_value %}
+            <small class="text-muted ms-1">
+              {% if step.trigger_type == 'timer' %}{{ step.trigger_value|int }} min
+              {% elif step.trigger_type in ('temp_above', 'temp_below') %}{{ step.trigger_value }}°
+              {% elif step.trigger_type == 'flow_volume' %}{{ step.trigger_value }} L
+              {% else %}{{ step.trigger_value }}{% endif %}
+            </small>
+            {% endif %}
+            {% if step.trigger_device %}
+            <small class="text-muted">on {{ step.trigger_device.name }}</small>
+            {% endif %}
+          </td>
+          <td>
+            <form method="post" action="/brew-programs/{{ program.id }}/steps/{{ step.id }}/delete"
+                  onsubmit="return confirm('Delete step {{ step.step_number }}: {{ step.name }}?')">
+              <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="text-center text-muted py-3 small">No steps yet — add one below.</div>
+  {% endif %}
+
+  <div class="card-footer bg-light">
+    <div class="fw-semibold mb-3 small text-uppercase text-muted">Add Step</div>
+    <form method="post" action="/brew-programs/{{ program.id }}/steps/add">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label small">Name <span class="text-danger">*</span></label>
+          <input type="text" name="name" class="form-control form-control-sm" required placeholder="e.g. Mash In">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small">Description</label>
+          <input type="text" name="description" class="form-control form-control-sm" placeholder="Optional details">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Trigger Type</label>
+          <select name="trigger_type" class="form-select form-select-sm">
+            <option value="manual">Manual</option>
+            <option value="timer">Timer</option>
+            <option value="temp_above">Temp Above</option>
+            <option value="temp_below">Temp Below</option>
+            <option value="flow_volume">Flow Volume</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Trigger Value <span class="text-muted">(optional)</span></label>
+          <input type="number" name="trigger_value" class="form-control form-control-sm"
+                 step="0.1" placeholder="e.g. 60">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Trigger Device <span class="text-muted">(optional)</span></label>
+          <select name="trigger_device_id" class="form-select form-select-sm">
+            <option value="">— None —</option>
+            {% for d in devices %}
+            <option value="{{ d.id }}">{{ d.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-12 col-lg-auto">
+          <button type="submit" class="btn btn-brew btn-sm">
+            <i class="bi bi-plus-lg me-1"></i>Add Step
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

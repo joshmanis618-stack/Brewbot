@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}Brew Day — {{ session.recipe.name if session.recipe else 'Session' }} — Brewbot{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <nav aria-label="breadcrumb"><ol class="breadcrumb mb-1 small">
+      <li class="breadcrumb-item"><a href="/brew-sessions">Brew Sessions</a></li>
+      <li class="breadcrumb-item active">Brew Day</li>
+    </ol></nav>
+    <h1><i class="bi bi-fire me-2 text-warning"></i>Brew Day — {{ session.recipe.name if session.recipe else 'Session #' + session.id|string }}</h1>
+  </div>
+  {% set status_colors = {'planned': 'secondary', 'brewing': 'warning', 'fermenting': 'info', 'conditioning': 'primary', 'complete': 'success'} %}
+  <span class="badge bg-{{ status_colors.get(session.status, 'secondary') }} fs-6">
+    {{ session.status|title }}
+  </span>
+</div>
+
+{% if not program %}
+<div class="alert alert-info d-flex align-items-center gap-2">
+  <i class="bi bi-info-circle-fill fs-5"></i>
+  <span>No automation program linked to this recipe. <a href="/brew-programs/new" class="alert-link">Add one via Brew Programs.</a></span>
+</div>
+{% else %}
+
+<div class="row g-3 mb-3">
+  <div class="col-auto">
+    <div class="text-muted small">Program</div>
+    <div class="fw-semibold">{{ program.name }}</div>
+  </div>
+  <div class="col-auto">
+    <div class="text-muted small">Steps</div>
+    <div class="fw-semibold">{{ session_steps|length }}</div>
+  </div>
+  <div class="col-auto">
+    <div class="text-muted small">Complete</div>
+    <div class="fw-semibold">{{ session_steps|selectattr('status', 'equalto', 'complete')|list|length }} / {{ session_steps|length }}</div>
+  </div>
+</div>
+
+<div class="d-flex flex-column gap-3">
+  {% for ss in session_steps %}
+  {% set step = ss.step %}
+
+  {% if ss.status == 'active' %}
+  {% set border_class = 'border-warning' %}
+  {% set bg_class = 'bg-warning bg-opacity-10' %}
+  {% elif ss.status == 'complete' %}
+  {% set border_class = 'border-success' %}
+  {% set bg_class = '' %}
+  {% elif ss.status == 'skipped' %}
+  {% set border_class = 'border-light' %}
+  {% set bg_class = 'opacity-50' %}
+  {% else %}
+  {% set border_class = 'border-secondary' %}
+  {% set bg_class = '' %}
+  {% endif %}
+
+  <div class="card border-start border-4 {{ border_class }} {{ bg_class }}">
+    <div class="card-body">
+      <div class="d-flex align-items-start gap-3">
+
+        <div class="flex-shrink-0">
+          {% if ss.status == 'complete' %}
+          <span class="badge rounded-pill bg-success fs-6"><i class="bi bi-check-lg"></i></span>
+          {% elif ss.status == 'skipped' %}
+          <span class="badge rounded-pill bg-secondary fs-6"><i class="bi bi-skip-forward"></i></span>
+          {% elif ss.status == 'active' %}
+          <span class="badge rounded-pill bg-warning text-dark fs-6">{{ step.step_number }}</span>
+          {% else %}
+          <span class="badge rounded-pill bg-secondary fs-6">{{ step.step_number }}</span>
+          {% endif %}
+        </div>
+
+        <div class="flex-grow-1">
+          <h5 class="mb-1 {{ 'text-muted text-decoration-line-through' if ss.status == 'skipped' }}">
+            {{ step.name }}
+          </h5>
+          {% if step.description %}
+          <p class="text-muted mb-2 small">{{ step.description }}</p>
+          {% endif %}
+
+          <div class="d-flex flex-wrap gap-2 mb-2">
+            {% if step.trigger_type == 'manual' %}
+            <span class="badge text-bg-light border">
+              <i class="bi bi-hand-index me-1"></i>Manual trigger
+            </span>
+            {% elif step.trigger_type == 'timer' %}
+            <span class="badge text-bg-light border">
+              <i class="bi bi-clock me-1"></i>Timer: {{ step.trigger_value|int }} min
+            </span>
+            {% elif step.trigger_type == 'temp_above' %}
+            <span class="badge text-bg-light border">
+              <i class="bi bi-thermometer-high me-1"></i>Temp above: {{ step.trigger_value }}°
+              {% if step.trigger_device %} on {{ step.trigger_device.name }}{% endif %}
+            </span>
+            {% elif step.trigger_type == 'temp_below' %}
+            <span class="badge text-bg-light border">
+              <i class="bi bi-thermometer-low me-1"></i>Temp below: {{ step.trigger_value }}°
+              {% if step.trigger_device %} on {{ step.trigger_device.name }}{% endif %}
+            </span>
+            {% elif step.trigger_type == 'flow_volume' %}
+            <span class="badge text-bg-light border">
+              <i class="bi bi-droplet me-1"></i>Flow volume: {{ step.trigger_value }} L
+              {% if step.trigger_device %} on {{ step.trigger_device.name }}{% endif %}
+            </span>
+            {% endif %}
+          </div>
+
+          {% if step.commands %}
+          <div class="d-flex flex-wrap gap-1 mb-2">
+            {% for cmd in step.commands %}
+            <span class="badge text-bg-secondary">
+              {{ cmd.device.name if cmd.device else cmd.device_id }}: {{ cmd.command }}
+            </span>
+            {% endfor %}
+          </div>
+          {% endif %}
+
+          {% if ss.started_at %}
+          <small class="text-muted">
+            Started: {{ ss.started_at.strftime('%H:%M:%S') }}
+            {% if ss.completed_at %} &mdash; Ended: {{ ss.completed_at.strftime('%H:%M:%S') }}{% endif %}
+          </small>
+          {% endif %}
+        </div>
+
+        <div class="flex-shrink-0 d-flex gap-2">
+          {% if ss.status == 'pending' %}
+          <form method="post" action="/brew-sessions/{{ session.id }}/steps/{{ ss.id }}/activate">
+            <button class="btn btn-sm btn-warning">
+              <i class="bi bi-play-fill me-1"></i>Start Step
+            </button>
+          </form>
+          {% elif ss.status == 'active' %}
+          <form method="post" action="/brew-sessions/{{ session.id }}/steps/{{ ss.id }}/complete">
+            <button class="btn btn-sm btn-success">
+              <i class="bi bi-check-lg me-1"></i>Complete
+            </button>
+          </form>
+          <form method="post" action="/brew-sessions/{{ session.id }}/steps/{{ ss.id }}/skip">
+            <button class="btn btn-sm btn-outline-secondary">
+              <i class="bi bi-skip-forward me-1"></i>Skip
+            </button>
+          </form>
+          {% endif %}
+        </div>
+
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% endif %}
+
+<div class="mt-4">
+  {% if session.recipe %}
+  <a href="/recipes/{{ session.recipe.id }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Back to Recipe
+  </a>
+  {% endif %}
+  <a href="/brew-sessions" class="btn btn-outline-secondary btn-sm ms-2">
+    <i class="bi bi-list me-1"></i>All Sessions
+  </a>
+</div>
+{% endblock %}

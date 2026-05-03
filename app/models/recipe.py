@@ -67,6 +67,7 @@ class Recipe(Base):
     yeasts = relationship("RecipeYeast", back_populates="recipe", cascade="all, delete-orphan")
     miscs = relationship("RecipeMisc", back_populates="recipe", cascade="all, delete-orphan")
     brew_sessions = relationship("BrewSession", back_populates="recipe")
+    brew_programs = relationship("BrewProgram", back_populates="recipe")
 
 
 class RecipeFermentable(Base):

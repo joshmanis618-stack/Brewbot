@@ -1,11 +1,14 @@
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy.orm import Session
+from sqlalchemy import func
+from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
+from app.models.brew_program import BrewProgram, BrewStep, BrewSessionStep
 from app.models.brew_session import BrewSession
 from app.models.device import Device, RigProfile
 from app.models.equipment import Equipment
@@ -489,8 +492,32 @@ def brew_sessions_list(request: Request, db: Session = Depends(get_db)):
     })
 
 
-@router.post("/brew-sessions", response_class=HTMLResponse)
+@router.get("/brew-sessions/new", response_class=HTMLResponse)
+def brew_session_new(request: Request, db: Session = Depends(get_db)):
+    return templates.TemplateResponse(request, "brew_sessions/form.html", {
+        "recipes": db.query(Recipe).order_by(Recipe.name).all(),
+        "page": "brew_sessions",
+    })
+
+
+@router.post("/brew-sessions/create", response_class=HTMLResponse)
 async def brew_session_create(request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    brew_date = None
+    if form.get("brew_date"):
+        brew_date = datetime.strptime(form["brew_date"], "%Y-%m-%d")
+    db.add(BrewSession(
+        recipe_id=int(form["recipe_id"]),
+        status="planned",
+        brew_date=brew_date,
+        notes=form.get("notes") or None,
+    ))
+    db.commit()
+    return RedirectResponse("/brew-sessions", status_code=303)
+
+
+@router.post("/brew-sessions", response_class=HTMLResponse)
+async def brew_session_create_modal(request: Request, db: Session = Depends(get_db)):
     form = await request.form()
     db.add(BrewSession(
         recipe_id=int(form["recipe_id"]),
@@ -499,6 +526,180 @@ async def brew_session_create(request: Request, db: Session = Depends(get_db)):
     ))
     db.commit()
     return RedirectResponse("/brew-sessions", status_code=303)
+
+
+def _load_session_with_program(session_id: int, db: Session):
+    return db.query(BrewSession).options(
+        selectinload(BrewSession.recipe).selectinload(Recipe.brew_programs).selectinload(BrewProgram.steps).selectinload(BrewStep.commands),
+        selectinload(BrewSession.brew_session_steps).selectinload(BrewSessionStep.step).selectinload(BrewStep.commands),
+        selectinload(BrewSession.brew_session_steps).selectinload(BrewSessionStep.step).selectinload(BrewStep.trigger_device),
+    ).get(session_id)
+
+
+@router.get("/brew-sessions/{session_id}/run", response_class=HTMLResponse)
+def brew_session_run(session_id: int, request: Request, db: Session = Depends(get_db)):
+    session = _load_session_with_program(session_id, db)
+    if not session:
+        return RedirectResponse("/brew-sessions", status_code=303)
+
+    program = None
+    if session.recipe and session.recipe.brew_programs:
+        program = session.recipe.brew_programs[0]
+
+    if program:
+        existing_step_ids = {ss.step_id for ss in session.brew_session_steps}
+        new_steps = [
+            BrewSessionStep(session_id=session.id, step_id=step.id, status="pending")
+            for step in program.steps
+            if step.id not in existing_step_ids
+        ]
+        if new_steps:
+            for ns in new_steps:
+                db.add(ns)
+            db.commit()
+            session = _load_session_with_program(session_id, db)
+            if session.recipe and session.recipe.brew_programs:
+                program = session.recipe.brew_programs[0]
+
+    session_steps = sorted(session.brew_session_steps, key=lambda ss: ss.step.step_number)
+
+    return templates.TemplateResponse(request, "brew_sessions/runner.html", {
+        "session": session,
+        "program": program,
+        "session_steps": session_steps,
+        "page": "brew_sessions",
+    })
+
+
+@router.post("/brew-sessions/{session_id}/steps/{session_step_id}/activate")
+def brew_session_step_activate(session_id: int, session_step_id: int, db: Session = Depends(get_db)):
+    ss = db.get(BrewSessionStep, session_step_id)
+    if ss and ss.session_id == session_id:
+        ss.status = "active"
+        ss.started_at = datetime.utcnow()
+        db.commit()
+    return RedirectResponse(f"/brew-sessions/{session_id}/run", status_code=303)
+
+
+@router.post("/brew-sessions/{session_id}/steps/{session_step_id}/complete")
+def brew_session_step_complete(session_id: int, session_step_id: int, db: Session = Depends(get_db)):
+    ss = db.get(BrewSessionStep, session_step_id)
+    if ss and ss.session_id == session_id:
+        ss.status = "complete"
+        ss.completed_at = datetime.utcnow()
+        db.commit()
+    return RedirectResponse(f"/brew-sessions/{session_id}/run", status_code=303)
+
+
+@router.post("/brew-sessions/{session_id}/steps/{session_step_id}/skip")
+def brew_session_step_skip(session_id: int, session_step_id: int, db: Session = Depends(get_db)):
+    ss = db.get(BrewSessionStep, session_step_id)
+    if ss and ss.session_id == session_id:
+        ss.status = "skipped"
+        ss.completed_at = datetime.utcnow()
+        db.commit()
+    return RedirectResponse(f"/brew-sessions/{session_id}/run", status_code=303)
+
+
+# ── Brew programs ─────────────────────────────────────────────────────────────
+
+@router.get("/brew-programs", response_class=HTMLResponse)
+def brew_programs_list(request: Request, db: Session = Depends(get_db)):
+    return templates.TemplateResponse(request, "brew_programs/list.html", {
+        "programs": db.query(BrewProgram).order_by(BrewProgram.name).all(),
+        "page": "brew_programs",
+    })
+
+
+@router.get("/brew-programs/new", response_class=HTMLResponse)
+def brew_program_new(request: Request, db: Session = Depends(get_db)):
+    return templates.TemplateResponse(request, "brew_programs/form.html", {
+        "program": None,
+        "recipes": db.query(Recipe).order_by(Recipe.name).all(),
+        "devices": db.query(Device).order_by(Device.name).all(),
+        "page": "brew_programs",
+    })
+
+
+@router.post("/brew-programs/create")
+async def brew_program_create(request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    db.add(BrewProgram(
+        name=form["name"],
+        description=form.get("description") or None,
+        recipe_id=int(form["recipe_id"]) if form.get("recipe_id") else None,
+    ))
+    db.commit()
+    return RedirectResponse("/brew-programs", status_code=303)
+
+
+@router.get("/brew-programs/{program_id}", response_class=HTMLResponse)
+def brew_program_edit(program_id: int, request: Request, db: Session = Depends(get_db)):
+    program = db.query(BrewProgram).options(
+        selectinload(BrewProgram.steps).selectinload(BrewStep.commands),
+        selectinload(BrewProgram.steps).selectinload(BrewStep.trigger_device),
+    ).get(program_id)
+    if not program:
+        return RedirectResponse("/brew-programs", status_code=303)
+    return templates.TemplateResponse(request, "brew_programs/form.html", {
+        "program": program,
+        "recipes": db.query(Recipe).order_by(Recipe.name).all(),
+        "devices": db.query(Device).order_by(Device.name).all(),
+        "page": "brew_programs",
+    })
+
+
+@router.post("/brew-programs/{program_id}/update")
+async def brew_program_update(program_id: int, request: Request, db: Session = Depends(get_db)):
+    program = db.get(BrewProgram, program_id)
+    if not program:
+        return RedirectResponse("/brew-programs", status_code=303)
+    form = await request.form()
+    program.name = form["name"]
+    program.description = form.get("description") or None
+    program.recipe_id = int(form["recipe_id"]) if form.get("recipe_id") else None
+    db.commit()
+    return RedirectResponse(f"/brew-programs/{program_id}", status_code=303)
+
+
+@router.post("/brew-programs/{program_id}/delete")
+def brew_program_delete(program_id: int, db: Session = Depends(get_db)):
+    program = db.get(BrewProgram, program_id)
+    if program:
+        db.delete(program)
+        db.commit()
+    return RedirectResponse("/brew-programs", status_code=303)
+
+
+@router.post("/brew-programs/{program_id}/steps/add")
+async def brew_program_step_add(program_id: int, request: Request, db: Session = Depends(get_db)):
+    program = db.get(BrewProgram, program_id)
+    if not program:
+        return RedirectResponse("/brew-programs", status_code=303)
+    form = await request.form()
+    max_step = db.query(func.max(BrewStep.step_number)).filter(
+        BrewStep.program_id == program_id
+    ).scalar() or 0
+    db.add(BrewStep(
+        program_id=program_id,
+        step_number=max_step + 1,
+        name=form["name"],
+        description=form.get("description") or None,
+        trigger_type=form.get("trigger_type", "manual"),
+        trigger_value=float(form["trigger_value"]) if form.get("trigger_value") else None,
+        trigger_device_id=int(form["trigger_device_id"]) if form.get("trigger_device_id") else None,
+    ))
+    db.commit()
+    return RedirectResponse(f"/brew-programs/{program_id}", status_code=303)
+
+
+@router.post("/brew-programs/{program_id}/steps/{step_id}/delete")
+def brew_program_step_delete(program_id: int, step_id: int, db: Session = Depends(get_db)):
+    step = db.get(BrewStep, step_id)
+    if step and step.program_id == program_id:
+        db.delete(step)
+        db.commit()
+    return RedirectResponse(f"/brew-programs/{program_id}", status_code=303)
 
 
 # ── HTMX ingredient row partials ──────────────────────────────────────────────

@@ -31,3 +31,8 @@ class BrewSession(Base):
 
     recipe = relationship("Recipe", back_populates="brew_sessions")
     equipment = relationship("Equipment")
+    brew_session_steps = relationship(
+        "BrewSessionStep",
+        back_populates="session",
+        cascade="all, delete-orphan",
+    )

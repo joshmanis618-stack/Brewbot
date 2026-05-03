@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Brew Programs — Brewbot{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-list-ol me-2 text-warning"></i>Brew Programs</h1>
+  <a href="/brew-programs/new" class="btn btn-brew">
+    <i class="bi bi-plus-lg me-1"></i>New Program
+  </a>
+</div>
+
+{% if programs %}
+<div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>Name</th>
+        <th>Linked Recipe</th>
+        <th class="text-center">Steps</th>
+        <th class="text-end">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in programs %}
+      <tr>
+        <td class="fw-semibold">{{ p.name }}</td>
+        <td>{{ p.recipe.name if p.recipe else '—' }}</td>
+        <td class="text-center">{{ p.steps|length }}</td>
+        <td class="text-end">
+          <div class="d-flex gap-2 justify-content-end">
+            <a href="/brew-programs/{{ p.id }}" class="btn btn-sm btn-outline-secondary">
+              <i class="bi bi-pencil me-1"></i>Edit
+            </a>
+            <form method="post" action="/brew-programs/{{ p.id }}/delete"
+                  onsubmit="return confirm('Delete {{ p.name }}?')">
+              <button class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <i class="bi bi-list-ol text-muted"></i>
+    <p class="fw-semibold mb-1">No brew programs yet</p>
+    <p class="small text-muted mb-3">Create an automation program to define steps for your brew day.</p>
+    <a href="/brew-programs/new" class="btn btn-brew btn-sm">Create First Program</a>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
