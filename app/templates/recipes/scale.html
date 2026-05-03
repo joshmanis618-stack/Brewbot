@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+{% block title %}Scale — {{ recipe.name }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-0">Scale Recipe</h2>
+    <small class="text-muted">{{ recipe.name }}</small>
+  </div>
+  <a href="/recipes/{{ recipe.id }}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Cancel
+  </a>
+</div>
+
+<div class="row g-4">
+  <!-- Current recipe summary -->
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-header fw-semibold"><i class="bi bi-clipboard me-2"></i>Original Recipe</div>
+      <div class="card-body">
+        <table class="table table-sm mb-0">
+          <tbody>
+            <tr><th class="text-muted fw-normal" style="width:55%">Batch size</th>
+                <td id="orig-batch">{{ "%.1f"|format(recipe.batch_size_l) }} L
+                  ({{ "%.1f"|format(recipe.batch_size_l * 0.264172) }} gal)</td></tr>
+            <tr><th class="text-muted fw-normal">Efficiency</th>
+                <td>{{ recipe.efficiency }}%</td></tr>
+            <tr><th class="text-muted fw-normal">OG</th>
+                <td>{{ "%.3f"|format(recipe.og) if recipe.og else "—" }}</td></tr>
+            <tr><th class="text-muted fw-normal">IBU</th>
+                <td>{{ "%.0f"|format(recipe.ibu) if recipe.ibu else "—" }}</td></tr>
+            <tr><th class="text-muted fw-normal">SRM</th>
+                <td>{{ "%.1f"|format(recipe.color_srm) if recipe.color_srm else "—" }}</td></tr>
+            <tr><th class="text-muted fw-normal">ABV</th>
+                <td>{{ "%.1f"|format(recipe.abv) if recipe.abv else "—" }}%</td></tr>
+          </tbody>
+        </table>
+        <hr class="my-3">
+        <div class="small text-muted fw-semibold mb-2">Grain bill</div>
+        {% for rf in recipe.fermentables %}
+        <div class="d-flex justify-content-between small">
+          <span>{{ rf.fermentable.name if rf.fermentable else rf.fermentable_id }}</span>
+          <span class="text-muted ms-2 text-nowrap"
+                data-orig-kg="{{ rf.amount_kg }}"
+                data-no-eff="{{ 'true' if rf.fermentable and rf.fermentable.type in ('Sugar','Extract','Dry Extract') else 'false' }}">
+            {{ "%.2f"|format(rf.amount_kg) }} kg
+          </span>
+        </div>
+        {% endfor %}
+        {% if recipe.hops %}
+        <hr class="my-3">
+        <div class="small text-muted fw-semibold mb-2">Hops</div>
+        {% for rh in recipe.hops %}
+        <div class="d-flex justify-content-between small">
+          <span>{{ rh.hop.name if rh.hop else rh.hop_id }} ({{ rh.use }}, {{ rh.time_min }}min)</span>
+          <span class="text-muted ms-2 text-nowrap" data-orig-g="{{ rh.amount_g }}">
+            {{ "%.1f"|format(rh.amount_g) }} g
+          </span>
+        </div>
+        {% endfor %}
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Scale form + live preview -->
+  <div class="col-md-8">
+    <div class="card mb-4">
+      <div class="card-header fw-semibold"><i class="bi bi-arrows-expand me-2"></i>Scale Targets</div>
+      <div class="card-body">
+        <form method="post" action="/recipes/{{ recipe.id }}/scale" id="scale-form">
+          <div class="row g-3 mb-3">
+            <div class="col-sm-4">
+              <label class="form-label">New recipe name</label>
+              <input name="new_name" type="text" class="form-control"
+                     value="{{ recipe.name }} (scaled)" required>
+            </div>
+            <div class="col-sm-4">
+              <label class="form-label">
+                Target batch size
+                <button type="button" id="unit-btn" class="btn btn-outline-secondary btn-sm ms-2 py-0"
+                        onclick="toggleUnit()">Switch to gal</button>
+              </label>
+              <div class="input-group">
+                <input name="new_batch_l" id="new-batch-l" type="number" step="0.1" min="0.1"
+                       class="form-control" value="{{ "%.1f"|format(recipe.batch_size_l) }}"
+                       oninput="updatePreview()" required>
+                <span class="input-group-text" id="unit-label">L</span>
+              </div>
+            </div>
+            <div class="col-sm-4">
+              <label class="form-label">New system efficiency (%)</label>
+              <input name="new_efficiency" id="new-eff" type="number" step="0.1" min="1" max="100"
+                     class="form-control" value="{{ recipe.efficiency }}"
+                     oninput="updatePreview()">
+              <div class="form-text">Original: {{ recipe.efficiency }}%</div>
+            </div>
+          </div>
+
+          <!-- Quick-pick batch sizes -->
+          <div class="mb-3">
+            <div class="small text-muted mb-1">Quick targets</div>
+            <div class="d-flex gap-2 flex-wrap">
+              {% for label, litres in [('1 gal', 3.785), ('2.5 gal', 9.46), ('5 gal', 18.93),
+                                       ('10 gal', 37.85), ('15 gal', 56.78), ('1 bbl', 117.35)] %}
+              <button type="button" class="btn btn-outline-secondary btn-sm quick-pick"
+                      data-l="{{ litres }}" onclick="setQuick(this)">{{ label }}</button>
+              {% endfor %}
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-brew">
+            <i class="bi bi-scissors me-1"></i>Create Scaled Recipe
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Live preview -->
+    <div class="card">
+      <div class="card-header fw-semibold"><i class="bi bi-eye me-2"></i>Scaled Preview</div>
+      <div class="card-body">
+        <div class="row g-3 mb-3">
+          <div class="col-4 col-sm-2">
+            <div class="small text-muted">Scale</div>
+            <div class="fw-bold" id="prev-ratio">1.00×</div>
+          </div>
+          <div class="col-4 col-sm-2">
+            <div class="small text-muted">Batch</div>
+            <div class="fw-bold" id="prev-batch">—</div>
+          </div>
+          <div class="col-4 col-sm-2">
+            <div class="small text-muted">Eff adj</div>
+            <div class="fw-bold" id="prev-eff-adj">1.00×</div>
+          </div>
+        </div>
+        <div class="small text-muted fw-semibold mb-2">Adjusted grain bill</div>
+        <div id="preview-fermentables"></div>
+        {% if recipe.hops %}
+        <div class="small text-muted fw-semibold mt-3 mb-2">Adjusted hops</div>
+        <div id="preview-hops"></div>
+        {% endif %}
+        <p class="text-muted small mt-3 mb-0">
+          <i class="bi bi-info-circle me-1"></i>
+          Sugars, extracts, and dry extracts scale by batch ratio only (no mash efficiency adjustment).
+          OG, IBU, and SRM will be recalculated server-side when the recipe is saved.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const origBatchL = {{ recipe.batch_size_l }};
+const origEff    = {{ recipe.efficiency }};
+let useGal = false;
+
+const ferms = [
+  {% for rf in recipe.fermentables %}
+  {
+    name: {{ (rf.fermentable.name ~ ' (' ~ rf.fermentable.type ~ ')') | tojson if rf.fermentable else rf.fermentable_id | tojson }},
+    kg: {{ rf.amount_kg }},
+    noEff: {{ 'true' if rf.fermentable and rf.fermentable.type in ('Sugar','Extract','Dry Extract') else 'false' }},
+  },
+  {% endfor %}
+];
+
+const hops = [
+  {% for rh in recipe.hops %}
+  {
+    name: {{ ((rh.hop.name if rh.hop else rh.hop_id|string) ~ ' (' ~ rh.use ~ ', ' ~ rh.time_min|string ~ 'min)') | tojson }},
+    g: {{ rh.amount_g }},
+  },
+  {% endfor %}
+];
+
+function toggleUnit() {
+  useGal = !useGal;
+  const btn = document.getElementById('unit-btn');
+  const lbl = document.getElementById('unit-label');
+  const inp = document.getElementById('new-batch-l');
+  if (useGal) {
+    btn.textContent = 'Switch to L';
+    lbl.textContent = 'gal';
+    inp.value = (parseFloat(inp.value) * 0.264172).toFixed(2);
+    inp.step = '0.1';
+  } else {
+    btn.textContent = 'Switch to gal';
+    lbl.textContent = 'L';
+    inp.value = (parseFloat(inp.value) * 3.78541).toFixed(1);
+    inp.step = '0.1';
+  }
+  // keep hidden field in litres
+  updatePreview();
+}
+
+function getBatchL() {
+  const v = parseFloat(document.getElementById('new-batch-l').value) || origBatchL;
+  return useGal ? v * 3.78541 : v;
+}
+
+function setQuick(btn) {
+  const litres = parseFloat(btn.dataset.l);
+  const inp = document.getElementById('new-batch-l');
+  if (useGal) {
+    inp.value = (litres * 0.264172).toFixed(2);
+  } else {
+    inp.value = litres.toFixed(1);
+  }
+  // store actual litres in the hidden-ish field for form submission
+  document.getElementById('new-batch-l').dataset.litres = litres;
+  updatePreview();
+}
+
+function updatePreview() {
+  const newBatchL = getBatchL();
+  const newEff = parseFloat(document.getElementById('new-eff').value) || origEff;
+  const batchRatio = newBatchL / origBatchL;
+  const effRatio = origEff / newEff;
+
+  document.getElementById('prev-ratio').textContent = batchRatio.toFixed(2) + '×';
+  document.getElementById('prev-batch').textContent =
+    (useGal ? (newBatchL * 0.264172).toFixed(2) + ' gal' : newBatchL.toFixed(1) + ' L');
+  document.getElementById('prev-eff-adj').textContent =
+    newEff === origEff ? '1.00× (no change)' : effRatio.toFixed(3) + '×';
+
+  let fHtml = '';
+  for (const f of ferms) {
+    const newKg = f.noEff ? f.kg * batchRatio : f.kg * batchRatio * effRatio;
+    const delta = newKg - f.kg;
+    const sign = delta >= 0 ? '+' : '';
+    fHtml += `<div class="d-flex justify-content-between small py-1 border-bottom">
+      <span>${f.name}</span>
+      <span class="ms-2 text-nowrap">
+        ${newKg.toFixed(3)} kg
+        <span class="text-muted">(${sign}${delta.toFixed(3)})</span>
+      </span>
+    </div>`;
+  }
+  document.getElementById('preview-fermentables').innerHTML = fHtml || '<span class="text-muted small">None</span>';
+
+  const hEl = document.getElementById('preview-hops');
+  if (hEl) {
+    let hHtml = '';
+    for (const h of hops) {
+      const newG = h.g * batchRatio;
+      const delta = newG - h.g;
+      const sign = delta >= 0 ? '+' : '';
+      hHtml += `<div class="d-flex justify-content-between small py-1 border-bottom">
+        <span>${h.name}</span>
+        <span class="ms-2 text-nowrap">
+          ${newG.toFixed(1)} g
+          <span class="text-muted">(${sign}${delta.toFixed(1)})</span>
+        </span>
+      </div>`;
+    }
+    hEl.innerHTML = hHtml || '<span class="text-muted small">None</span>';
+  }
+}
+
+// Before submit, convert gal back to litres in the hidden field
+document.getElementById('scale-form').addEventListener('submit', () => {
+  if (useGal) {
+    const inp = document.getElementById('new-batch-l');
+    inp.value = (parseFloat(inp.value) * 3.78541).toFixed(4);
+  }
+});
+
+updatePreview();
+</script>
+{% endblock %}

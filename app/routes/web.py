@@ -217,6 +217,95 @@ def recipe_delete(recipe_id: int, db: Session = Depends(get_db)):
     return RedirectResponse("/recipes", status_code=303)
 
 
+_NO_EFF_TYPES = {"Sugar", "Extract", "Dry Extract"}
+
+@router.get("/recipes/{recipe_id}/scale", response_class=HTMLResponse)
+def recipe_scale_form(recipe_id: int, request: Request, db: Session = Depends(get_db)):
+    recipe = db.get(Recipe, recipe_id)
+    if not recipe:
+        return RedirectResponse("/recipes", status_code=303)
+    return templates.TemplateResponse(request, "recipes/scale.html", {
+        "recipe": recipe,
+        "page": "recipes",
+    })
+
+
+@router.post("/recipes/{recipe_id}/scale")
+async def recipe_scale_submit(recipe_id: int, request: Request, db: Session = Depends(get_db)):
+    recipe = db.get(Recipe, recipe_id)
+    if not recipe:
+        return RedirectResponse("/recipes", status_code=303)
+
+    form = await request.form()
+    new_batch_l = float(form["new_batch_l"])
+    new_efficiency = float(form.get("new_efficiency") or recipe.efficiency)
+    new_name = form.get("new_name") or f"{recipe.name} (scaled)"
+
+    batch_ratio = new_batch_l / recipe.batch_size_l
+    old_eff = recipe.efficiency / 100.0
+    new_eff = new_efficiency / 100.0
+
+    scaled = Recipe(
+        name=new_name,
+        type=recipe.type,
+        style_id=recipe.style_id,
+        equipment_id=recipe.equipment_id,
+        batch_size_l=new_batch_l,
+        boil_size_l=round(recipe.boil_size_l * batch_ratio, 2) if recipe.boil_size_l else None,
+        boil_time_min=recipe.boil_time_min,
+        efficiency=new_efficiency,
+        notes=recipe.notes,
+        brewer=recipe.brewer,
+    )
+    db.add(scaled)
+    db.flush()
+
+    for rf in recipe.fermentables:
+        ferm = db.get(Fermentable, rf.fermentable_id)
+        if ferm and ferm.type in _NO_EFF_TYPES:
+            new_kg = rf.amount_kg * batch_ratio
+        else:
+            new_kg = rf.amount_kg * batch_ratio * (old_eff / new_eff) if new_eff else rf.amount_kg * batch_ratio
+        db.add(RecipeFermentable(
+            recipe_id=scaled.id,
+            fermentable_id=rf.fermentable_id,
+            amount_kg=round(new_kg, 4),
+            add_after_boil=rf.add_after_boil,
+        ))
+
+    for rh in recipe.hops:
+        db.add(RecipeHop(
+            recipe_id=scaled.id,
+            hop_id=rh.hop_id,
+            amount_g=round(rh.amount_g * batch_ratio, 2),
+            time_min=rh.time_min,
+            use=rh.use,
+            form=rh.form,
+        ))
+
+    for ry in recipe.yeasts:
+        db.add(RecipeYeast(
+            recipe_id=scaled.id,
+            yeast_id=ry.yeast_id,
+            amount=round(ry.amount * batch_ratio, 2),
+        ))
+
+    for rm in recipe.miscs:
+        db.add(RecipeMisc(
+            recipe_id=scaled.id,
+            misc_id=rm.misc_id,
+            amount=round(rm.amount * batch_ratio, 2),
+            use=rm.use,
+            time_min=rm.time_min,
+        ))
+
+    db.flush()
+    db.refresh(scaled)
+    calc_service.calculate(scaled)
+    db.commit()
+    return RedirectResponse(f"/recipes/{scaled.id}", status_code=303)
+
+
 # ── Equipment ─────────────────────────────────────────────────────────────────
 
 @router.get("/equipment", response_class=HTMLResponse)
