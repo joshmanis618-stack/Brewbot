@@ -823,3 +823,10 @@ def htmx_misc_row(index: int, request: Request, db: Session = Depends(get_db)):
         "index": index,
         "miscs": db.query(Misc).order_by(Misc.name).all(),
     })
+
+
+# ── Unit / measurement converter ──────────────────────────────────────────────
+
+@router.get("/converter", response_class=HTMLResponse)
+def converter(request: Request):
+    return templates.TemplateResponse(request, "converter.html", {"page": "converter"})

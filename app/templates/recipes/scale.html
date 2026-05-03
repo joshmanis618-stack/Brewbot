@@ -268,3 +268,14 @@ document.getElementById('scale-form').addEventListener('submit', () => {
 updatePreview();
 </script>
 {% endblock %}
+
+{% block page_help %}
+<h6>How scaling works</h6>
+<p>Enter a new batch size and the scaler multiplies every ingredient by the ratio of new batch to original batch.</p>
+<h6>Efficiency adjustment</h6>
+<p>If your system efficiency differs from the original recipe, grains are adjusted by an additional factor equal to (original efficiency / new efficiency). This compensates for the fact that a less efficient system needs more grain to hit the same OG. Hops are not efficiency-adjusted — they scale by batch ratio only.</p>
+<h6>Sugars and extracts</h6>
+<p>Sugars, liquid extracts, and dry malt extract are not efficiency-adjusted because they do not go through the mash. They scale by batch ratio only regardless of what you enter in the efficiency field.</p>
+<h6>Saving the result</h6>
+<p>Clicking <strong>Create Scaled Recipe</strong> saves the adjusted quantities as a brand new recipe with a name of your choice. The original recipe is not modified.</p>
+{% endblock %}

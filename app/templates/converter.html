@@ -1,0 +1,511 @@
+{% extends "base.html" %}
+{% block title %}Converter — Brewbot{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2 class="mb-0"><i class="bi bi-calculator me-2"></i>Brewing Calculator</h2>
+</div>
+
+<div class="row g-4">
+
+  <!-- ── Color ──────────────────────────────────────────────────────────── -->
+  <div class="col-md-6 col-xl-4">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Color</div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">Enter any one value; the others update automatically.</p>
+        <div class="mb-2">
+          <label class="form-label small mb-1">SRM (Standard Reference Method)</label>
+          <input id="c_srm" type="number" step="0.1" min="0" class="form-control"
+                 placeholder="e.g. 8" oninput="colorFrom('srm')">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">EBC (European Brewery Convention)</label>
+          <input id="c_ebc" type="number" step="0.1" min="0" class="form-control"
+                 placeholder="e.g. 16" oninput="colorFrom('ebc')">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Lovibond (°L)</label>
+          <input id="c_lov" type="number" step="0.1" min="0" class="form-control"
+                 placeholder="e.g. 6" oninput="colorFrom('lov')">
+        </div>
+        <div id="c_swatch" class="mt-3 rounded" style="height:36px;transition:background 0.2s;border:1px solid var(--bs-border-color);"></div>
+        <div class="text-muted small mt-1" id="c_label"></div>
+        <hr class="my-3">
+        <div class="small text-muted">
+          EBC = SRM × 1.97<br>
+          °L = (SRM + 0.76) / 1.3546
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Gravity ────────────────────────────────────────────────────────── -->
+  <div class="col-md-6 col-xl-4">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Gravity</div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">Enter any one value; the others update automatically.</p>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Specific Gravity (SG)</label>
+          <input id="g_sg" type="number" step="0.001" min="1" max="1.2" class="form-control"
+                 placeholder="e.g. 1.052" oninput="gravFrom('sg')">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Plato (°P)</label>
+          <input id="g_plato" type="number" step="0.1" min="0" max="40" class="form-control"
+                 placeholder="e.g. 12.9" oninput="gravFrom('plato')">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Brix (°Bx)</label>
+          <input id="g_brix" type="number" step="0.1" min="0" max="40" class="form-control"
+                 placeholder="e.g. 13.2" oninput="gravFrom('brix')">
+        </div>
+        <hr class="my-3">
+        <div class="small text-muted">
+          Plato ≈ 259 × (SG − 1) / SG<br>
+          Brix ≈ Plato (slight refractometer correction at FG)
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Temperature ────────────────────────────────────────────────────── -->
+  <div class="col-md-6 col-xl-4">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Temperature</div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">Enter any one value; the others update automatically.</p>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Celsius (°C)</label>
+          <input id="t_c" type="number" step="0.1" class="form-control"
+                 placeholder="e.g. 20" oninput="tempFrom('c')">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Fahrenheit (°F)</label>
+          <input id="t_f" type="number" step="0.1" class="form-control"
+                 placeholder="e.g. 68" oninput="tempFrom('f')">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Kelvin (K)</label>
+          <input id="t_k" type="number" step="0.1" min="0" class="form-control"
+                 placeholder="e.g. 293.15" oninput="tempFrom('k')">
+        </div>
+        <hr class="my-3">
+        <div class="small text-muted">
+          °F = °C × 9/5 + 32<br>
+          K = °C + 273.15
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Weight ─────────────────────────────────────────────────────────── -->
+  <div class="col-md-6 col-xl-4">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Weight</div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">Enter any one value; the others update automatically.</p>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Kilograms (kg)</label>
+          <input id="w_kg" type="number" step="0.001" min="0" class="form-control"
+                 placeholder="e.g. 5" oninput="weightFrom('kg')">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Pounds (lb)</label>
+          <input id="w_lb" type="number" step="0.01" min="0" class="form-control"
+                 placeholder="e.g. 11.02" oninput="weightFrom('lb')">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Ounces (oz)</label>
+          <input id="w_oz" type="number" step="0.01" min="0" class="form-control"
+                 placeholder="e.g. 176.4" oninput="weightFrom('oz')">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Grams (g)</label>
+          <input id="w_g" type="number" step="0.1" min="0" class="form-control"
+                 placeholder="e.g. 5000" oninput="weightFrom('g')">
+        </div>
+        <div id="w_lboz" class="small text-muted mt-2"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Volume ─────────────────────────────────────────────────────────── -->
+  <div class="col-md-6 col-xl-4">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Volume</div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">Enter any one value; the others update automatically.</p>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Litres (L)</label>
+          <input id="v_l" type="number" step="0.1" min="0" class="form-control"
+                 placeholder="e.g. 19" oninput="volFrom('l')">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Millilitres (mL)</label>
+          <input id="v_ml" type="number" step="1" min="0" class="form-control"
+                 placeholder="e.g. 19000" oninput="volFrom('ml')">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">US Gallons (gal)</label>
+          <input id="v_usgal" type="number" step="0.01" min="0" class="form-control"
+                 placeholder="e.g. 5.02" oninput="volFrom('usgal')">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">US Quarts (qt)</label>
+          <input id="v_usqt" type="number" step="0.1" min="0" class="form-control"
+                 placeholder="e.g. 20.1" oninput="volFrom('usqt')">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">US Fluid Ounces (fl oz)</label>
+          <input id="v_usfloz" type="number" step="1" min="0" class="form-control"
+                 placeholder="e.g. 640" oninput="volFrom('usfloz')">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">UK Gallons (Imp. gal)</label>
+          <input id="v_ukgal" type="number" step="0.01" min="0" class="form-control"
+                 placeholder="e.g. 4.18" oninput="volFrom('ukgal')">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">US Barrels (bbl, 31 gal)</label>
+          <input id="v_bbl" type="number" step="0.001" min="0" class="form-control"
+                 placeholder="e.g. 0.162" oninput="volFrom('bbl')">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ABV & Attenuation ──────────────────────────────────────────────── -->
+  <div class="col-md-6 col-xl-4">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">ABV &amp; Attenuation</div>
+      <div class="card-body">
+        <div class="mb-2">
+          <label class="form-label small mb-1">Original Gravity (OG)</label>
+          <input id="a_og" type="number" step="0.001" min="1" max="1.2" class="form-control"
+                 placeholder="e.g. 1.052" oninput="calcAbv()">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Final Gravity (FG)</label>
+          <input id="a_fg" type="number" step="0.001" min="1" max="1.2" class="form-control"
+                 placeholder="e.g. 1.010" oninput="calcAbv()">
+        </div>
+        <div class="mt-3 p-3 rounded bg-body-secondary">
+          <div class="row text-center g-2">
+            <div class="col-4">
+              <div class="small text-muted">ABV</div>
+              <div class="fw-bold fs-5" id="a_abv">—</div>
+            </div>
+            <div class="col-4">
+              <div class="small text-muted">Attenuation</div>
+              <div class="fw-bold fs-5" id="a_atten">—</div>
+            </div>
+            <div class="col-4">
+              <div class="small text-muted">Calories / 12oz</div>
+              <div class="fw-bold fs-5" id="a_cal">—</div>
+            </div>
+          </div>
+        </div>
+        <hr class="my-3">
+        <div class="small text-muted">
+          ABV = (OG − FG) × 131.25<br>
+          Attenuation = (OG<sub>pts</sub> − FG<sub>pts</sub>) / OG<sub>pts</sub><br>
+          Calories ≈ 3.55 × FG × (0.8114 × ABV + 0.01 × (OG<sub>pts</sub> − FG<sub>pts</sub>))
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── IBU / BU:GU ────────────────────────────────────────────────────── -->
+  <div class="col-md-6 col-xl-4">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">IBU &amp; Bitterness Ratio</div>
+      <div class="card-body">
+        <div class="mb-2">
+          <label class="form-label small mb-1">IBU (International Bitterness Units)</label>
+          <input id="i_ibu" type="number" step="1" min="0" class="form-control"
+                 placeholder="e.g. 45" oninput="calcIbu()">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">OG (for BU:GU ratio)</label>
+          <input id="i_og" type="number" step="0.001" min="1" max="1.2" class="form-control"
+                 placeholder="e.g. 1.052" oninput="calcIbu()">
+        </div>
+        <div class="mt-3 p-3 rounded bg-body-secondary">
+          <div class="row text-center g-2">
+            <div class="col-6">
+              <div class="small text-muted">BU:GU Ratio</div>
+              <div class="fw-bold fs-5" id="i_bugu">—</div>
+            </div>
+            <div class="col-6">
+              <div class="small text-muted">Perceived Balance</div>
+              <div class="fw-bold" id="i_balance">—</div>
+            </div>
+          </div>
+        </div>
+        <hr class="my-3">
+        <div class="small text-muted">
+          BU:GU = IBU / (OG − 1) × 1000 / 1000<br>
+          &lt;0.5 = malty &nbsp;|&nbsp; 0.5–0.8 = balanced &nbsp;|&nbsp; &gt;0.8 = hoppy
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Priming Sugar ──────────────────────────────────────────────────── -->
+  <div class="col-md-6 col-xl-4">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Priming Sugar (Carbonation)</div>
+      <div class="card-body">
+        <div class="mb-2">
+          <label class="form-label small mb-1">Batch volume (L)</label>
+          <input id="p_vol" type="number" step="0.1" min="0" class="form-control"
+                 placeholder="e.g. 19" oninput="calcPriming()">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Target CO₂ volumes</label>
+          <input id="p_co2" type="number" step="0.1" min="0" max="5" class="form-control"
+                 placeholder="e.g. 2.4" oninput="calcPriming()">
+          <div class="form-text">Ale: 2.2–2.7 &nbsp;|&nbsp; Lager: 2.4–2.8 &nbsp;|&nbsp; Wheat: 3.0–4.0 &nbsp;|&nbsp; Stout: 1.8–2.2</div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Beer temperature at bottling (°C)</label>
+          <input id="p_temp" type="number" step="0.5" min="0" max="30" class="form-control"
+                 placeholder="e.g. 20" value="20" oninput="calcPriming()">
+        </div>
+        <div class="mt-3 p-3 rounded bg-body-secondary">
+          <div class="row text-center g-2">
+            <div class="col-6">
+              <div class="small text-muted">Table sugar (g)</div>
+              <div class="fw-bold fs-5" id="p_sucrose">—</div>
+            </div>
+            <div class="col-6">
+              <div class="small text-muted">Corn sugar / dextrose (g)</div>
+              <div class="fw-bold fs-5" id="p_dextrose">—</div>
+            </div>
+          </div>
+        </div>
+        <hr class="my-3">
+        <div class="small text-muted">
+          CO₂ already in solution is subtracted based on beer temperature.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Strike Water ───────────────────────────────────────────────────── -->
+  <div class="col-md-6 col-xl-4">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Strike Water Temperature</div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">Find the temperature to heat strike water so the mash hits your target temp.</p>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Target mash temperature (°C)</label>
+          <input id="s_tmash" type="number" step="0.5" class="form-control"
+                 placeholder="e.g. 67" oninput="calcStrike()">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Grain temperature (°C)</label>
+          <input id="s_tgrain" type="number" step="0.5" class="form-control"
+                 placeholder="e.g. 20" value="20" oninput="calcStrike()">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Water-to-grain ratio (L/kg)</label>
+          <input id="s_ratio" type="number" step="0.1" min="1" max="6" class="form-control"
+                 placeholder="e.g. 3.0" value="3.0" oninput="calcStrike()">
+        </div>
+        <div class="mt-3 p-3 rounded bg-body-secondary text-center">
+          <div class="small text-muted">Strike water temperature</div>
+          <div class="fw-bold fs-4" id="s_strike">—</div>
+        </div>
+        <hr class="my-3">
+        <div class="small text-muted">
+          T<sub>strike</sub> = (0.41 / R) × (T<sub>mash</sub> − T<sub>grain</sub>) + T<sub>mash</sub>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── Color ────────────────────────────────────────────────────────────────────
+const SRM_COLORS = [
+  [2,  '#F3F993'], [3,  '#F5F75C'], [4,  '#F6F513'], [5,  '#EAE615'],
+  [6,  '#E0D01B'], [7,  '#D5BC26'], [8,  '#CDAA37'], [9,  '#C1963C'],
+  [10, '#BE8C3A'], [11, '#BE823A'], [12, '#C17A37'], [13, '#BF7138'],
+  [14, '#BC6733'], [15, '#B26033'], [16, '#A85839'], [17, '#985336'],
+  [18, '#8D4C32'], [19, '#7C452D'], [20, '#6B3A24'], [24, '#5D341A'],
+  [29, '#4E2A0C'], [35, '#3A1A0A'], [40, '#300D05'], [100,'#1F0202'],
+];
+function srmToHex(srm) {
+  if (srm <= 0) return '#F3F993';
+  for (let i = 0; i < SRM_COLORS.length - 1; i++) {
+    const [s1, c1] = SRM_COLORS[i];
+    const [s2, c2] = SRM_COLORS[i + 1];
+    if (srm <= s2) {
+      const t = (srm - s1) / (s2 - s1);
+      return lerpColor(c1, c2, t);
+    }
+  }
+  return SRM_COLORS[SRM_COLORS.length - 1][1];
+}
+function lerpColor(a, b, t) {
+  const r1 = parseInt(a.slice(1,3),16), g1 = parseInt(a.slice(3,5),16), b1 = parseInt(a.slice(5,7),16);
+  const r2 = parseInt(b.slice(1,3),16), g2 = parseInt(b.slice(3,5),16), b2 = parseInt(b.slice(5,7),16);
+  const r = Math.round(r1 + (r2-r1)*t), g = Math.round(g1 + (g2-g1)*t), bl = Math.round(b1 + (b2-b1)*t);
+  return '#' + [r,g,bl].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+function colorFrom(src) {
+  const fields = {srm:'c_srm', ebc:'c_ebc', lov:'c_lov'};
+  const val = parseFloat(document.getElementById(fields[src]).value);
+  if (isNaN(val) || val < 0) { clearColor(); return; }
+  let srm;
+  if (src === 'srm') srm = val;
+  else if (src === 'ebc') srm = val / 1.97;
+  else srm = val * 1.3546 - 0.76;
+  srm = Math.max(0, srm);
+  setOther('c_srm', src==='srm' ? null : srm.toFixed(1));
+  setOther('c_ebc', src==='ebc' ? null : (srm * 1.97).toFixed(1));
+  setOther('c_lov', src==='lov' ? null : ((srm + 0.76) / 1.3546).toFixed(1));
+  document.getElementById('c_swatch').style.background = srmToHex(srm);
+  const labels = ['Pale Straw','Straw','Pale Gold','Gold','Light Amber','Amber','Medium Amber','Copper','Light Brown','Brown','Dark Brown','Very Dark Brown','Black'];
+  const thresholds = [2,3,4,6,9,12,15,18,20,26,33,40,100];
+  let label = 'Black';
+  for (let i = 0; i < thresholds.length; i++) { if (srm <= thresholds[i]) { label = labels[i]; break; } }
+  document.getElementById('c_label').textContent = `SRM ${srm.toFixed(1)} — ${label}`;
+}
+function clearColor() {
+  ['c_srm','c_ebc','c_lov'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('c_swatch').style.background = '';
+  document.getElementById('c_label').textContent = '';
+}
+function setOther(id, val) { if (val !== null) document.getElementById(id).value = val; }
+
+// ── Gravity ──────────────────────────────────────────────────────────────────
+function sgToPlato(sg) { return 259 * (sg - 1) / sg; }
+function platoToSg(p)  { return 259 / (259 - p); }
+function gravFrom(src) {
+  let sg, plato, brix;
+  const v = parseFloat(document.getElementById({sg:'g_sg',plato:'g_plato',brix:'g_brix'}[src]).value);
+  if (isNaN(v)) { ['g_sg','g_plato','g_brix'].forEach(id => { if (id !== 'g_'+src) document.getElementById(id).value=''; }); return; }
+  if (src === 'sg') { sg = v; plato = sgToPlato(sg); brix = plato * 1.04; }
+  else if (src === 'plato') { plato = v; sg = platoToSg(plato); brix = plato * 1.04; }
+  else { brix = v; plato = brix / 1.04; sg = platoToSg(plato); }
+  if (src !== 'sg')    document.getElementById('g_sg').value    = sg.toFixed(4);
+  if (src !== 'plato') document.getElementById('g_plato').value = plato.toFixed(2);
+  if (src !== 'brix')  document.getElementById('g_brix').value  = brix.toFixed(2);
+}
+
+// ── Temperature ──────────────────────────────────────────────────────────────
+function tempFrom(src) {
+  const v = parseFloat(document.getElementById({c:'t_c',f:'t_f',k:'t_k'}[src]).value);
+  if (isNaN(v)) return;
+  let c;
+  if (src === 'c') c = v;
+  else if (src === 'f') c = (v - 32) * 5/9;
+  else c = v - 273.15;
+  if (src !== 'c') document.getElementById('t_c').value = c.toFixed(2);
+  if (src !== 'f') document.getElementById('t_f').value = (c * 9/5 + 32).toFixed(2);
+  if (src !== 'k') document.getElementById('t_k').value = (c + 273.15).toFixed(2);
+}
+
+// ── Weight ───────────────────────────────────────────────────────────────────
+const W = { kg:1000, lb:453.592, oz:28.3495, g:1 };
+function weightFrom(src) {
+  const v = parseFloat(document.getElementById('w_'+src).value);
+  if (isNaN(v) || v < 0) return;
+  const grams = v * W[src];
+  if (src !== 'kg') document.getElementById('w_kg').value = (grams/W.kg).toFixed(4);
+  if (src !== 'lb') document.getElementById('w_lb').value = (grams/W.lb).toFixed(4);
+  if (src !== 'oz') document.getElementById('w_oz').value = (grams/W.oz).toFixed(3);
+  if (src !== 'g')  document.getElementById('w_g').value  = grams.toFixed(2);
+  // fractional lb → lb + oz display
+  const lbs = grams / W.lb;
+  const wholeLb = Math.floor(lbs);
+  const remOz = Math.round((lbs - wholeLb) * 16 * 10) / 10;
+  document.getElementById('w_lboz').textContent =
+    wholeLb > 0 || remOz > 0 ? `= ${wholeLb} lb ${remOz} oz` : '';
+}
+
+// ── Volume ───────────────────────────────────────────────────────────────────
+const V = { l:1, ml:0.001, usgal:3.78541, usqt:0.946353, usfloz:0.0295735, ukgal:4.54609, bbl:117.348 };
+function volFrom(src) {
+  const v = parseFloat(document.getElementById('v_'+src).value);
+  if (isNaN(v) || v < 0) return;
+  const litres = v * V[src];
+  Object.keys(V).forEach(k => {
+    if (k !== src) document.getElementById('v_'+k).value = (litres / V[k]).toFixed(k === 'ml' ? 0 : k === 'bbl' ? 4 : 3);
+  });
+}
+
+// ── ABV ──────────────────────────────────────────────────────────────────────
+function calcAbv() {
+  const og = parseFloat(document.getElementById('a_og').value);
+  const fg = parseFloat(document.getElementById('a_fg').value);
+  if (isNaN(og) || isNaN(fg) || og <= 1 || fg <= 1 || fg > og) {
+    ['a_abv','a_atten','a_cal'].forEach(id => document.getElementById(id).textContent = '—');
+    return;
+  }
+  const abv = (og - fg) * 131.25;
+  const ogPts = (og - 1) * 1000, fgPts = (fg - 1) * 1000;
+  const atten = ((ogPts - fgPts) / ogPts * 100);
+  const cal = 3.55 * fg * (0.8114 * abv + 0.01 * (ogPts - fgPts));
+  document.getElementById('a_abv').textContent   = abv.toFixed(1) + '%';
+  document.getElementById('a_atten').textContent = atten.toFixed(1) + '%';
+  document.getElementById('a_cal').textContent   = Math.round(cal);
+}
+
+// ── IBU ──────────────────────────────────────────────────────────────────────
+function calcIbu() {
+  const ibu = parseFloat(document.getElementById('i_ibu').value);
+  const og  = parseFloat(document.getElementById('i_og').value);
+  if (isNaN(ibu) || ibu < 0) { document.getElementById('i_bugu').textContent='—'; document.getElementById('i_balance').textContent='—'; return; }
+  if (!isNaN(og) && og > 1) {
+    const bugu = ibu / ((og - 1) * 1000);
+    document.getElementById('i_bugu').textContent = bugu.toFixed(3);
+    document.getElementById('i_balance').textContent =
+      bugu < 0.4 ? 'Very malty' : bugu < 0.5 ? 'Malty' : bugu < 0.7 ? 'Balanced' : bugu < 0.9 ? 'Hoppy' : 'Very hoppy';
+  } else {
+    document.getElementById('i_bugu').textContent = '—';
+    document.getElementById('i_balance').textContent = '—';
+  }
+}
+
+// ── Priming sugar ─────────────────────────────────────────────────────────────
+function co2InSolution(tempC) {
+  // Approximate dissolved CO2 in beer as a function of temperature
+  return 3.0378 - 0.050062 * tempC + 0.00026555 * tempC * tempC;
+}
+function calcPriming() {
+  const vol   = parseFloat(document.getElementById('p_vol').value);
+  const co2   = parseFloat(document.getElementById('p_co2').value);
+  const tempC = parseFloat(document.getElementById('p_temp').value);
+  if (isNaN(vol) || isNaN(co2) || isNaN(tempC)) {
+    document.getElementById('p_sucrose').textContent = '—';
+    document.getElementById('p_dextrose').textContent = '—';
+    return;
+  }
+  const residual = co2InSolution(tempC);
+  const neededCo2 = Math.max(0, co2 - residual); // volumes CO2 to add
+  // 1 gram sucrose produces ≈ 0.00285 volumes CO2 per litre
+  const sucrose  = neededCo2 * vol / 0.00285;
+  const dextrose = sucrose / 0.91; // dextrose is ~91% as fermentable
+  document.getElementById('p_sucrose').textContent  = sucrose.toFixed(1)  + ' g';
+  document.getElementById('p_dextrose').textContent = dextrose.toFixed(1) + ' g';
+}
+
+// ── Strike water ──────────────────────────────────────────────────────────────
+function calcStrike() {
+  const tmash  = parseFloat(document.getElementById('s_tmash').value);
+  const tgrain = parseFloat(document.getElementById('s_tgrain').value);
+  const ratio  = parseFloat(document.getElementById('s_ratio').value);
+  if (isNaN(tmash) || isNaN(tgrain) || isNaN(ratio) || ratio <= 0) {
+    document.getElementById('s_strike').textContent = '—'; return;
+  }
+  // Palmer formula: T_strike = (0.41/R) * (T_mash - T_grain) + T_mash
+  const strike = (0.41 / ratio) * (tmash - tgrain) + tmash;
+  document.getElementById('s_strike').textContent = strike.toFixed(1) + ' °C  (' + (strike * 9/5 + 32).toFixed(1) + ' °F)';
+}
+</script>
+{% endblock %}

@@ -158,3 +158,24 @@
 </div>
 {% endif %}
 {% endblock %}
+
+{% block page_help %}
+<h6>What is a brew program?</h6>
+<p>A brew program is an ordered sequence of steps that Brewbot executes during a brew day. Each step can send commands to hardware devices (valves, pumps, heaters) and wait for a trigger condition before advancing to the next step. Link a program to a recipe so it appears automatically in that recipe's brew session.</p>
+<h6>Trigger types</h6>
+<ul>
+  <li><strong>Manual</strong> — the brewer clicks Start Step to advance. Use this for any action that needs human judgment.</li>
+  <li><strong>Timer</strong> — automatically advances after a set number of minutes once the step is started.</li>
+  <li><strong>Temp Above</strong> — advances when a sensor reading rises above the specified temperature threshold.</li>
+  <li><strong>Temp Below</strong> — advances when a sensor reading falls below the specified temperature threshold.</li>
+  <li><strong>Flow Volume</strong> — advances when a flow meter reports that the specified volume (in liters) has passed.</li>
+</ul>
+<h6>Device commands</h6>
+<p>Each step can send one or more commands to registered devices when the step becomes active:</p>
+<ul>
+  <li><strong>open / close</strong> — for solenoid valves.</li>
+  <li><strong>on / off</strong> — for pumps, heaters, or any switched device.</li>
+  <li><strong>setpoint:NNN</strong> — sends a temperature setpoint (e.g., <code>setpoint:68.5</code>) to a heater controller.</li>
+</ul>
+<p>Commands are published over MQTT to <code>brewbot/{device_key}/command</code> as soon as the step starts.</p>
+{% endblock %}

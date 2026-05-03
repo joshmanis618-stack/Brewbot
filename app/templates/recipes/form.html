@@ -460,6 +460,15 @@ function syncUnitLabels() {
   document.querySelectorAll('[data-ulabel]').forEach(el => {
     el.textContent = imp ? el.dataset.ulabel.split('|')[1] : el.dataset.ulabel.split('|')[0];
   });
+  document.querySelectorAll('input[data-utype="kg"]').forEach(el => {
+    el.placeholder = imp ? 'lb' : 'kg';
+  });
+  document.querySelectorAll('input[data-utype="g"]').forEach(el => {
+    el.placeholder = imp ? 'oz' : 'g';
+  });
+  document.querySelectorAll('input[data-utype="vol"]').forEach(el => {
+    el.placeholder = imp ? 'gal' : 'L';
+  });
   const btn = document.getElementById('units-btn');
   if (btn) btn.textContent = imp ? 'Imperial' : 'Metric';
 }
@@ -681,4 +690,28 @@ document.body.addEventListener('htmx:afterSwap', () => {
   recalculate();
 });
 </script>
+{% endblock %}
+
+{% block page_help %}
+<h6>Ingredient sections</h6>
+<ul>
+  <li><strong>Fermentables</strong> — grains, adjuncts, sugars, and extracts that provide fermentable sugar. Grains go through the mash and are subject to efficiency; sugars and extracts are not.</li>
+  <li><strong>Hops</strong> — add bitterness (Boil), flavor, or aroma (Dry Hop, Aroma). Time in minutes counts down from the end of the boil.</li>
+  <li><strong>Yeast</strong> — determines attenuation, which controls how much sugar is consumed and therefore the final gravity.</li>
+  <li><strong>Miscellaneous</strong> — water agents, finings, spices, and other additions.</li>
+</ul>
+<h6>Estimated stats</h6>
+<ul>
+  <li><strong>OG</strong> (Original Gravity) — density of the wort before fermentation. Higher means more sugar.</li>
+  <li><strong>FG</strong> (Final Gravity) — density after fermentation. Lower means drier beer.</li>
+  <li><strong>ABV</strong> — alcohol by volume, derived from the OG/FG difference: (OG &minus; FG) &times; 131.25.</li>
+  <li><strong>IBU</strong> — bitterness units calculated using the Tinseth formula. Pellet hops get a 10% utilization bonus.</li>
+  <li><strong>SRM</strong> — beer color on a light-to-dark scale (2 = pale straw, 40+ = black). Calculated using the Morey formula.</li>
+</ul>
+<h6>Style gauge</h6>
+<p>Select a style to see colored range bars for OG, FG, ABV, IBU, and SRM. A green marker means your recipe is within style guidelines; yellow means slightly outside; red means well outside.</p>
+<h6>Units toggle</h6>
+<p>The <strong>Metric / Imperial</strong> button in the Estimated Stats card converts all volume and weight fields between liters/kg/g and gallons/lb/oz. Your preference is saved in your browser.</p>
+<h6>Equipment profile</h6>
+<p>Selecting an equipment profile automatically fills in the batch size, pre-boil volume, boil time, and efficiency based on your saved equipment setup.</p>
 {% endblock %}

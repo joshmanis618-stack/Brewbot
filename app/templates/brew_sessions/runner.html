@@ -165,3 +165,19 @@
   </a>
 </div>
 {% endblock %}
+
+{% block page_help %}
+<h6>Step progression</h6>
+<p>Steps run in order. Click <strong>Start Step</strong> on a pending step to make it active. When the work is done, click <strong>Complete</strong> to move on. If you need to skip a step (for example if a sensor trigger is not available), click <strong>Skip</strong>.</p>
+<h6>Device commands</h6>
+<p>When you start a step, Brewbot immediately sends any device commands defined on that step — for example, opening a valve or turning on a pump. Commands are sent over MQTT so your hardware controller receives them in real time.</p>
+<h6>Step colors</h6>
+<ul>
+  <li><strong>Yellow border</strong> — the currently active step.</li>
+  <li><strong>Green border</strong> — a completed step.</li>
+  <li><strong>Faded</strong> — a skipped step.</li>
+  <li><strong>Grey border</strong> — pending steps not yet started.</li>
+</ul>
+<h6>No program shown?</h6>
+<p>If this page shows "No automation program linked," go to <strong>Brew Programs</strong>, create a program, and link it to this recipe using the Linked Recipe dropdown. Then return to your brew session.</p>
+{% endblock %}

@@ -487,6 +487,32 @@
 </div>
 {% endblock %}
 
+{% block page_help %}
+<h6>Tabs</h6>
+<ul>
+  <li><strong>Fermentables</strong> — grains, sugars, malt extracts, and adjuncts used to build gravity and color.</li>
+  <li><strong>Hops</strong> — hop varieties used for bitterness, flavor, and aroma.</li>
+  <li><strong>Yeast</strong> — yeast strains that determine attenuation, flavor character, and fermentation temperature range.</li>
+  <li><strong>Misc</strong> — water agents, finings, spices, fruit, and any other additions.</li>
+</ul>
+<h6>Fermentable fields</h6>
+<ul>
+  <li><strong>Color (SRM)</strong> — the color contribution of the ingredient. Lovibond (°L) and SRM are nearly identical for values under 10; for darker malts, SRM &asymp; 1.35 &times; °L.</li>
+  <li><strong>Potential (SG)</strong> — the maximum specific gravity a fermentable could contribute if 100% extracted. A typical base malt is around 1.037.</li>
+  <li><strong>Yield %</strong> — the percentage of the fermentable that converts to fermentable sugar. Used to derive potential: potential = 1 + (yield / 100 &times; 0.046).</li>
+</ul>
+<h6>Hop fields</h6>
+<ul>
+  <li><strong>Alpha %</strong> — the alpha acid content. Higher alpha means more bitterness per gram. This is the main driver of IBU calculations.</li>
+</ul>
+<h6>Yeast fields</h6>
+<ul>
+  <li><strong>Attenuation %</strong> — how much of the wort sugar the yeast consumes. Higher attenuation produces a drier, lower-FG beer.</li>
+</ul>
+<h6>Adding, editing, and deleting</h6>
+<p>Click <strong>Add</strong> to open the ingredient form. Click the pencil icon on any row to edit it. Click the trash icon to delete. Ingredients used in existing recipes will retain their saved amounts even after editing.</p>
+{% endblock %}
+
 {% block scripts %}
 <script>
 function openFermentable(d) {

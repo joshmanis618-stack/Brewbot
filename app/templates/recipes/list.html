@@ -96,3 +96,18 @@
 </div>
 {% endif %}
 {% endblock %}
+
+{% block page_help %}
+<h6>Creating a recipe</h6>
+<p>Click <strong>New Recipe</strong> to open the recipe builder. Give your recipe a name, choose a beer type and style, then add fermentables, hops, yeast, and any miscellaneous ingredients.</p>
+<h6>Recipe card stats</h6>
+<ul>
+  <li><strong>OG</strong> — original gravity. A typical pale ale is around 1.050; a strong stout might be 1.080+.</li>
+  <li><strong>ABV</strong> — estimated alcohol by volume after fermentation.</li>
+  <li><strong>IBU</strong> — bitterness level. Under 20 is mild; over 60 is very bitter.</li>
+  <li><strong>Vol</strong> — batch size in liters.</li>
+</ul>
+<p>The colored dot on each card shows the approximate beer color based on SRM.</p>
+<h6>Scale button</h6>
+<p>The <strong>Scale</strong> button (arrows icon) opens the recipe scaler, where you can adjust the batch size and system efficiency. All ingredient amounts are recalculated proportionally and saved as a new recipe — the original is not changed.</p>
+{% endblock %}
