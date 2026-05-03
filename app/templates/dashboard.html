@@ -103,23 +103,23 @@
             {% endif %}
             <span class="badge bg-secondary">{{ recipe.type }}</span>
           </div>
-          <h6 class="card-title text-dark mb-3">{{ recipe.name }}</h6>
+          <h6 class="card-title text-body mb-3">{{ recipe.name }}</h6>
           <div class="row g-2 text-center">
             {% if recipe.abv %}
             <div class="col-4">
               <div class="stat-label">ABV</div>
-              <div class="stat-val text-dark">{{ "%.1f"|format(recipe.abv) }}%</div>
+              <div class="stat-val text-body">{{ "%.1f"|format(recipe.abv) }}%</div>
             </div>
             {% endif %}
             {% if recipe.ibu %}
             <div class="col-4">
               <div class="stat-label">IBU</div>
-              <div class="stat-val text-dark">{{ recipe.ibu|int }}</div>
+              <div class="stat-val text-body">{{ recipe.ibu|int }}</div>
             </div>
             {% endif %}
             <div class="col-4">
               <div class="stat-label">Batch</div>
-              <div class="stat-val text-dark">{{ recipe.batch_size_l }}L</div>
+              <div class="stat-val text-body">{{ recipe.batch_size_l }}L</div>
             </div>
           </div>
         </div>

@@ -3,7 +3,7 @@
 // ── Live device readings via WebSocket ────────────────────────────────────────
 
 (function () {
-  const WS_URL = `ws://${location.host}/ws/readings`;
+  const WS_URL = `ws://${location.host}/api/ws/readings`;
   let ws, retryDelay = 2000;
 
   function connect() {
@@ -78,7 +78,7 @@ async function sendCommand(deviceId, action) {
   const btn = event.currentTarget;
   btn.disabled = true;
   try {
-    const res = await fetch(`/devices/${deviceId}/command`, {
+    const res = await fetch(`/api/devices/${deviceId}/command`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action }),

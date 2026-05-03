@@ -570,6 +570,18 @@ def device_delete(device_id: int, db: Session = Depends(get_db)):
     return RedirectResponse("/devices", status_code=303)
 
 
+@router.post("/rigs")
+async def rig_create(request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    db.add(RigProfile(
+        name=form["name"],
+        type=form.get("type", "custom"),
+        description=form.get("description") or None,
+    ))
+    db.commit()
+    return RedirectResponse("/devices", status_code=303)
+
+
 # ── Brew sessions ─────────────────────────────────────────────────────────────
 
 @router.get("/brew-sessions", response_class=HTMLResponse)

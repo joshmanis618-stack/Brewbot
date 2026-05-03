@@ -63,8 +63,8 @@
 /* ── Recipe cards ───────────────────────────────────────────────────────── */
 .recipe-card { transition: transform 0.15s, box-shadow 0.15s; cursor: pointer; }
 .recipe-card:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,0,0,.12); }
-.recipe-card .stat-label { font-size: 0.7rem; color: var(--bb-muted); text-transform: uppercase; letter-spacing: 0.05em; }
-.recipe-card .stat-val   { font-size: 1.1rem; font-weight: 600; }
+.recipe-card .stat-label { font-size: 0.7rem; color: var(--bs-secondary-color, var(--bb-muted)); text-transform: uppercase; letter-spacing: 0.05em; }
+.recipe-card .stat-val   { font-size: 1.1rem; font-weight: 600; color: var(--bs-body-color); }
 
 /* ── SRM colour chip ────────────────────────────────────────────────────── */
 .srm-chip {

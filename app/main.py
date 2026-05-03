@@ -61,7 +61,7 @@ app.include_router(fermentables_router, prefix="/api")
 app.include_router(hops_router, prefix="/api")
 app.include_router(yeasts_router, prefix="/api")
 app.include_router(miscs_router, prefix="/api")
-app.include_router(devices_router)   # /devices, /rigs, /ws/readings — no prefix
+app.include_router(devices_router, prefix="/api")  # must be /api — avoids shadowing web GET/POST /devices
 
 # Web routes (HTML pages)
 app.include_router(web_router)
