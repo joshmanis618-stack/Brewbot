@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Settings — Brewbot{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-gear me-2"></i>Settings</h1>
+</div>
+
+{% if imported %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+  <strong>Import complete.</strong>
+  {% if import_summary %}
+  <ul class="mb-0 mt-1">
+    {% for key, count in import_summary.items() %}
+    <li>{{ key|replace('_', ' ')|title }}: {{ count }} created</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{% endif %}
+
+{% if beerxml_imported %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+  Imported {{ beerxml_count }} recipe(s) from BeerXML.
+  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{% endif %}
+
+<div class="card mb-4">
+  <div class="card-header fw-semibold"><i class="bi bi-archive me-2"></i>Full Backup / Restore</div>
+  <div class="card-body">
+    <p class="text-muted mb-3">Export all recipes, ingredients, equipment, brew programs, and sessions to a single JSON file. Use this to migrate to a new server or create a point-in-time backup.</p>
+    <div class="row g-3">
+      <div class="col-md-6">
+        <a href="/settings/export/json" class="btn btn-brew">
+          <i class="bi bi-download me-1"></i>Export JSON Backup
+        </a>
+      </div>
+      <div class="col-md-6">
+        <form method="post" action="/settings/import/json" enctype="multipart/form-data">
+          <div class="mb-2">
+            <input type="file" class="form-control" name="file" accept=".json" required>
+          </div>
+          <button type="submit" class="btn btn-outline-secondary">Import JSON</button>
+          <div class="form-text mt-1">Importing appends data — existing records are not overwritten.</div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header fw-semibold"><i class="bi bi-filetype-xml me-2"></i>BeerXML Recipe Interchange</div>
+  <div class="card-body">
+    <p class="text-muted mb-3">BeerXML is the industry-standard recipe format supported by Beersmith, Brewfather, BrewUnited, and most other brewing software.</p>
+    <div class="row g-3">
+      <div class="col-md-6">
+        <a href="/settings/export/beerxml" class="btn btn-outline-secondary">
+          <i class="bi bi-download me-1"></i>Export All Recipes (BeerXML)
+        </a>
+      </div>
+      <div class="col-md-6">
+        <form method="post" action="/settings/import/beerxml" enctype="multipart/form-data">
+          <div class="mb-2">
+            <input type="file" class="form-control" name="file" accept=".xml,.beerxml" required>
+          </div>
+          <button type="submit" class="btn btn-outline-secondary">Import BeerXML</button>
+          <div class="form-text mt-1">Imports recipes and ingredient library entries. Brew sessions and programs are not included in BeerXML.</div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block page_help %}
+<h6>Backup formats</h6>
+<ul>
+  <li><strong>JSON backup</strong> includes everything: recipes, ingredients, equipment, rig profiles, devices, brew programs, and brew sessions.</li>
+  <li><strong>BeerXML</strong> includes recipes only (ingredients are created in the library as needed). Brew sessions and programs are not included.</li>
+</ul>
+
+<h6>Import is always safe</h6>
+<p>Both import methods are append-only — no existing data is deleted or overwritten. Ingredients and equipment are matched by name; recipes are always added as new entries.</p>
+
+<h6>Migrating to a new server</h6>
+<ol>
+  <li>Export a JSON backup from this page.</li>
+  <li>Move your Docker volume or use <code>pg_dump</code> to transfer the database, <strong>or</strong> start fresh on the new server.</li>
+  <li>On the new server, go to Settings and import the JSON backup file.</li>
+</ol>
+{% endblock %}

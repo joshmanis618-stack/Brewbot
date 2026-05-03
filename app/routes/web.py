@@ -1,8 +1,8 @@
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Depends, File, Request, UploadFile
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
@@ -18,6 +18,9 @@ from app.models.misc import Misc
 from app.models.recipe import Recipe, RecipeFermentable, RecipeHop, RecipeMisc, RecipeYeast
 from app.models.style import Style
 from app.models.yeast import Yeast
+import json
+from app.services import backup as backup_service
+from app.services import beerxml as beerxml_service
 from app.services import calc as calc_service
 
 TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
@@ -801,6 +804,61 @@ def brew_program_step_delete(program_id: int, step_id: int, db: Session = Depend
         db.delete(step)
         db.commit()
     return RedirectResponse(f"/brew-programs/{program_id}", status_code=303)
+
+
+# ── Settings / backup ────────────────────────────────────────────────────────
+
+@router.get("/settings", response_class=HTMLResponse)
+def settings_page(request: Request):
+    return templates.TemplateResponse(request, "settings.html", {"page": "settings"})
+
+
+@router.get("/settings/export/json")
+def settings_export_json(db: Session = Depends(get_db)):
+    data = backup_service.export_all(db)
+    return Response(
+        content=json.dumps(data, indent=2, default=str),
+        media_type="application/json",
+        headers={"Content-Disposition": 'attachment; filename="brewbot-backup.json"'},
+    )
+
+
+@router.post("/settings/import/json", response_class=HTMLResponse)
+async def settings_import_json(request: Request, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    content = await file.read()
+    data = json.loads(content)
+    summary = backup_service.import_all(db, data)
+    return templates.TemplateResponse(request, "settings.html", {
+        "page": "settings",
+        "imported": True,
+        "import_summary": summary,
+    })
+
+
+@router.get("/settings/export/beerxml")
+def settings_export_beerxml(recipe_id: int = None, db: Session = Depends(get_db)):
+    if recipe_id is not None:
+        recipe = db.get(Recipe, recipe_id)
+        recipes = [recipe] if recipe else []
+    else:
+        recipes = db.query(Recipe).all()
+    xml_str = beerxml_service.export_recipes(recipes)
+    return Response(
+        content=xml_str,
+        media_type="application/xml",
+        headers={"Content-Disposition": 'attachment; filename="brewbot-recipes.xml"'},
+    )
+
+
+@router.post("/settings/import/beerxml", response_class=HTMLResponse)
+async def settings_import_beerxml(request: Request, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    content = await file.read()
+    created = beerxml_service.import_recipes(content.decode("utf-8", errors="replace"), db)
+    return templates.TemplateResponse(request, "settings.html", {
+        "page": "settings",
+        "beerxml_imported": True,
+        "beerxml_count": len(created),
+    })
 
 
 # ── HTMX ingredient row partials ──────────────────────────────────────────────

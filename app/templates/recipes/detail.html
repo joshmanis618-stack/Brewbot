@@ -19,6 +19,9 @@
     <a href="/recipes/{{ recipe.id }}/scale" class="btn btn-outline-secondary">
       <i class="bi bi-arrows-expand me-1"></i>Scale
     </a>
+    <a href="/settings/export/beerxml?recipe_id={{ recipe.id }}" class="btn btn-outline-secondary">
+      <i class="bi bi-filetype-xml me-1"></i>BeerXML
+    </a>
     <form method="post" action="/recipes/{{ recipe.id }}/delete"
           onsubmit="return confirm('Delete this recipe?')">
       <button class="btn btn-outline-danger"><i class="bi bi-trash me-1"></i>Delete</button>
