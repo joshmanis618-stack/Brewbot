@@ -125,10 +125,10 @@
             </tr></thead>
             <tbody id="fermentables-tbody">
               {% if recipe %}
-              {% for i, rf in recipe.fermentables|enumerate %}
+              {% for rf in recipe.fermentables %}
               <tr data-row-type="fermentable">
                 <td>
-                  <select name="fermentable_id_{{ i }}" class="form-select form-select-sm ingredient-select"
+                  <select name="fermentable_id_{{ loop.index0 }}" class="form-select form-select-sm ingredient-select"
                           required onchange="fermentableSelected(this)">
                     <option value="">— Select —</option>
                     {% for f in all_fermentables %}
@@ -141,10 +141,10 @@
                     {% endfor %}
                   </select>
                 </td>
-                <td><input name="amount_kg_{{ i }}" type="number" step="0.01"
+                <td><input name="amount_kg_{{ loop.index0 }}" type="number" step="0.01"
                            class="form-control form-control-sm" value="{{ rf.amount_kg }}"
                            data-utype="kg" required oninput="recalculate()"></td>
-                <td class="text-center"><input name="add_after_boil_{{ i }}" type="checkbox"
+                <td class="text-center"><input name="add_after_boil_{{ loop.index0 }}" type="checkbox"
                            class="form-check-input" value="1"
                            {{ 'checked' if rf.add_after_boil }} onchange="recalculate()"></td>
                 <td><button type="button" class="btn btn-sm btn-outline-danger"
@@ -180,10 +180,10 @@
             </tr></thead>
             <tbody id="hops-tbody">
               {% if recipe %}
-              {% for i, rh in recipe.hops|enumerate %}
+              {% for rh in recipe.hops %}
               <tr data-row-type="hop">
                 <td>
-                  <select name="hop_id_{{ i }}" class="form-select form-select-sm ingredient-select"
+                  <select name="hop_id_{{ loop.index0 }}" class="form-select form-select-sm ingredient-select"
                           required onchange="recalculate()">
                     <option value="">— Select —</option>
                     {% for h in all_hops %}
@@ -194,18 +194,18 @@
                     {% endfor %}
                   </select>
                 </td>
-                <td><input name="hop_amount_g_{{ i }}" type="number" step="0.1"
+                <td><input name="hop_amount_g_{{ loop.index0 }}" type="number" step="0.1"
                            class="form-control form-control-sm" value="{{ rh.amount_g }}"
                            data-utype="g" required oninput="recalculate()"></td>
-                <td><input name="time_min_{{ i }}" type="number"
+                <td><input name="time_min_{{ loop.index0 }}" type="number"
                            class="form-control form-control-sm" value="{{ rh.time_min }}"
                            oninput="recalculate()"></td>
-                <td><select name="hop_use_{{ i }}" class="form-select form-select-sm" onchange="recalculate()">
+                <td><select name="hop_use_{{ loop.index0 }}" class="form-select form-select-sm" onchange="recalculate()">
                   {% for u in ['Boil','Dry Hop','First Wort','Aroma','Mash'] %}
                   <option {{ 'selected' if rh.use == u }}>{{ u }}</option>
                   {% endfor %}
                 </select></td>
-                <td><select name="hop_form_{{ i }}" class="form-select form-select-sm" onchange="recalculate()">
+                <td><select name="hop_form_{{ loop.index0 }}" class="form-select form-select-sm" onchange="recalculate()">
                   {% for f in ['Pellet','Plug','Leaf'] %}
                   <option {{ 'selected' if rh.form == f }}>{{ f }}</option>
                   {% endfor %}
@@ -240,10 +240,10 @@
             </tr></thead>
             <tbody id="yeasts-tbody">
               {% if recipe %}
-              {% for i, ry in recipe.yeasts|enumerate %}
+              {% for ry in recipe.yeasts %}
               <tr data-row-type="yeast">
                 <td>
-                  <select name="yeast_id_{{ i }}" class="form-select form-select-sm ingredient-select"
+                  <select name="yeast_id_{{ loop.index0 }}" class="form-select form-select-sm ingredient-select"
                           required onchange="recalculate()">
                     <option value="">— Select —</option>
                     {% for y in all_yeasts %}
@@ -254,7 +254,7 @@
                     {% endfor %}
                   </select>
                 </td>
-                <td><input name="yeast_amount_{{ i }}" type="number" step="0.5"
+                <td><input name="yeast_amount_{{ loop.index0 }}" type="number" step="0.5"
                            class="form-control form-control-sm" value="{{ ry.amount }}"></td>
                 <td><button type="button" class="btn btn-sm btn-outline-danger"
                             onclick="removeRow(this)"><i class="bi bi-x"></i></button></td>
@@ -288,10 +288,10 @@
             </tr></thead>
             <tbody id="miscs-tbody">
               {% if recipe %}
-              {% for i, rm in recipe.miscs|enumerate %}
+              {% for rm in recipe.miscs %}
               <tr data-row-type="misc">
                 <td>
-                  <select name="misc_id_{{ i }}" class="form-select form-select-sm" required>
+                  <select name="misc_id_{{ loop.index0 }}" class="form-select form-select-sm" required>
                     <option value="">— Select —</option>
                     {% for m in all_miscs %}
                     <option value="{{ m.id }}" {{ 'selected' if m.id == rm.misc_id }}>
@@ -300,14 +300,14 @@
                     {% endfor %}
                   </select>
                 </td>
-                <td><input name="misc_amount_{{ i }}" type="number" step="0.1"
+                <td><input name="misc_amount_{{ loop.index0 }}" type="number" step="0.1"
                            class="form-control form-control-sm" value="{{ rm.amount }}"></td>
-                <td><select name="misc_use_{{ i }}" class="form-select form-select-sm">
+                <td><select name="misc_use_{{ loop.index0 }}" class="form-select form-select-sm">
                   {% for u in ['Boil','Mash','Primary','Secondary','Bottling'] %}
                   <option {{ 'selected' if rm.use == u }}>{{ u }}</option>
                   {% endfor %}
                 </select></td>
-                <td><input name="misc_time_{{ i }}" type="number"
+                <td><input name="misc_time_{{ loop.index0 }}" type="number"
                            class="form-control form-control-sm" value="{{ rm.time_min }}"></td>
                 <td><button type="button" class="btn btn-sm btn-outline-danger"
                             onclick="removeRow(this)"><i class="bi bi-x"></i></button></td>
