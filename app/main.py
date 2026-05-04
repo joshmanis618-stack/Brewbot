@@ -53,7 +53,7 @@ app.add_middleware(
     session_cookie="brewbot_session",
     max_age=86400 * 7,  # 7 days
     same_site="lax",
-    https_only=True,
+    https_only=False,
 )
 
 # Static files

@@ -8,5 +8,6 @@ jinja2
 aiomqtt
 python-multipart
 passlib[bcrypt]>=1.7.4
+bcrypt<4.0.0
 pyotp>=2.9.0
 itsdangerous>=2.1.0
