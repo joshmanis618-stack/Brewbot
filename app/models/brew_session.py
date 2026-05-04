@@ -36,3 +36,9 @@ class BrewSession(Base):
         back_populates="session",
         cascade="all, delete-orphan",
     )
+    fermentation_readings = relationship(
+        "FermentationReading",
+        back_populates="session",
+        cascade="all, delete-orphan",
+        order_by="FermentationReading.recorded_at",
+    )

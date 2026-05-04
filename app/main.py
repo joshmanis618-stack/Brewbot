@@ -1,9 +1,11 @@
 import asyncio
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 
 from app.database import engine, SessionLocal
 from app.models import Base
@@ -19,7 +21,7 @@ from app.routes.ingredients import fermentables_router, hops_router, yeasts_rout
 from app.routes.devices import router as devices_router
 
 # Web (HTML) routes — registered last so API routes take precedence on /
-from app.routes.web import router as web_router
+from app.routes.web import router as web_router, public_router
 
 
 @asynccontextmanager
@@ -45,6 +47,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.environ.get("SESSION_SECRET", "change-me-in-production-use-env-var"),
+    session_cookie="brewbot_session",
+    max_age=86400 * 7,  # 7 days
+    same_site="lax",
+    https_only=True,
+)
+
 # Static files
 app.mount(
     "/static",
@@ -63,5 +74,6 @@ app.include_router(yeasts_router, prefix="/api")
 app.include_router(miscs_router, prefix="/api")
 app.include_router(devices_router, prefix="/api")  # must be /api — avoids shadowing web GET/POST /devices
 
-# Web routes (HTML pages)
+# Web routes (HTML pages) — public (unauthenticated) routes first
+app.include_router(public_router)
 app.include_router(web_router)

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text
+from sqlalchemy import Column, Integer, String, Float, Text
 from .base import Base
 
 
@@ -11,3 +11,6 @@ class Misc(Base):
     type = Column(String(30))    # Spice, Fining, Water Agent, Herb, Flavor, Other
     use_for = Column(Text)
     notes = Column(Text)
+
+    stock_qty = Column(Float, nullable=True, default=0.0)
+    stock_unit = Column(String(10), nullable=True, default="g")

@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Security Settings — Brewbot{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-shield-lock me-2"></i>Security Settings</h1>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header fw-semibold"><i class="bi bi-phone me-2"></i>Two-Factor Authentication</div>
+  <div class="card-body">
+    {% if request.query_params.get('enabled') == '1' %}
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+      Two-factor authentication has been enabled successfully.
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endif %}
+    {% if error %}
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+      {{ error }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endif %}
+
+    {% if current_user.totp_enabled %}
+    <div class="d-flex align-items-center gap-3 mb-3">
+      <span class="badge bg-success fs-6"><i class="bi bi-check-circle me-1"></i>2FA Enabled</span>
+      <span class="text-muted small">Your account is protected with two-factor authentication.</span>
+    </div>
+    <form method="post" action="/settings/security/disable-2fa">
+      <button type="submit" class="btn btn-outline-danger"
+              onclick="return confirm('Are you sure you want to disable two-factor authentication?')">
+        <i class="bi bi-shield-x me-1"></i>Disable 2FA
+      </button>
+    </form>
+    {% else %}
+    <p class="text-muted mb-3">Scan this QR code with Google Authenticator, Authy, or any TOTP app, then enter the generated code to confirm.</p>
+    <div class="mb-3">
+      <div id="qrcode" class="mb-2"></div>
+      <p class="small text-muted mb-1">Or enter this secret manually:</p>
+      <code class="user-select-all">{{ totp_secret }}</code>
+    </div>
+    <form method="post" action="/settings/security/enable-2fa">
+      <input type="hidden" name="totp_secret" value="{{ totp_secret }}">
+      <div class="mb-3" style="max-width:240px;">
+        <label class="form-label">Verification Code</label>
+        <input type="text" name="code" class="form-control"
+               maxlength="6" inputmode="numeric" placeholder="000000" autocomplete="one-time-code" required>
+      </div>
+      <button type="submit" class="btn btn-brew">
+        <i class="bi bi-shield-check me-1"></i>Enable 2FA
+      </button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header fw-semibold"><i class="bi bi-key me-2"></i>Change Password</div>
+  <div class="card-body">
+    {% if request.query_params.get('pw_changed') == '1' %}
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+      Password changed successfully.
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endif %}
+    {% if request.query_params.get('pw_error') == '1' %}
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+      Current password is incorrect.
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endif %}
+    <form method="post" action="/settings/security/change-password" id="change-pw-form" style="max-width:360px;">
+      <div class="mb-3">
+        <label class="form-label">Current Password</label>
+        <input type="password" name="current_password" class="form-control" required>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">New Password</label>
+        <input type="password" name="new_password" id="new_password" class="form-control" required>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Confirm New Password</label>
+        <input type="password" id="confirm_new_password" class="form-control" required>
+        <div id="cpw-mismatch" class="form-text text-danger d-none">Passwords do not match.</div>
+      </div>
+      <button type="submit" class="btn btn-brew">
+        <i class="bi bi-check-lg me-1"></i>Update Password
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block page_help %}
+<h6>Two-Factor Authentication</h6>
+<p>2FA adds a second layer of security. After enabling it, you will need your authenticator app in addition to your password to log in.</p>
+<h6>Change Password</h6>
+<p>Choose a strong, unique password. You must enter your current password to set a new one.</p>
+{% endblock %}
+
+{% block scripts %}
+{% if not current_user.totp_enabled %}
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script>
+new QRCode(document.getElementById("qrcode"), {
+  text: "{{ totp_uri | e }}",
+  width: 200,
+  height: 200
+});
+</script>
+{% endif %}
+<script>
+document.getElementById('change-pw-form').addEventListener('submit', function(e) {
+  var pw = document.getElementById('new_password').value;
+  var cpw = document.getElementById('confirm_new_password').value;
+  var msg = document.getElementById('cpw-mismatch');
+  if (pw !== cpw) {
+    e.preventDefault();
+    msg.classList.remove('d-none');
+  } else {
+    msg.classList.add('d-none');
+  }
+});
+document.getElementById('confirm_new_password').addEventListener('input', function() {
+  var pw = document.getElementById('new_password').value;
+  var msg = document.getElementById('cpw-mismatch');
+  if (this.value && this.value !== pw) {
+    msg.classList.remove('d-none');
+  } else {
+    msg.classList.add('d-none');
+  }
+});
+</script>
+{% endblock %}

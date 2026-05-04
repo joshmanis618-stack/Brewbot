@@ -1,0 +1,14 @@
+{
+    # Global options
+    email admin@example.com
+}
+
+# LAN/local HTTP access — no domain or TLS needed
+:80 {
+    reverse_proxy api:8000
+}
+
+# To enable HTTPS with a real domain, replace the block above with:
+# your-domain.com {
+#     reverse_proxy api:8000
+# }

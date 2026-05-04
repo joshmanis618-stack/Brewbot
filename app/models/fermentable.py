@@ -24,3 +24,5 @@ class Fermentable(Base):
     recommend_mash = Column(Boolean, default=True)
 
     notes = Column(Text)
+
+    stock_qty = Column(Float, nullable=True, default=0.0)

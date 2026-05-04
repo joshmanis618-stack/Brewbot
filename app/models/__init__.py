@@ -1,5 +1,6 @@
 from .base import Base
 from .style import Style
+from .user import User
 from .equipment import Equipment
 from .fermentable import Fermentable
 from .hop import Hop
@@ -9,6 +10,7 @@ from .recipe import Recipe, RecipeFermentable, RecipeHop, RecipeYeast, RecipeMis
 from .brew_session import BrewSession
 from .device import RigProfile, Device, DeviceReading
 from .brew_program import BrewProgram, BrewStep, BrewStepCommand, BrewSessionStep
+from .fermentation_reading import FermentationReading
 
 __all__ = [
     "Base",
@@ -31,4 +33,6 @@ __all__ = [
     "BrewStep",
     "BrewStepCommand",
     "BrewSessionStep",
+    "User",
+    "FermentationReading",
 ]

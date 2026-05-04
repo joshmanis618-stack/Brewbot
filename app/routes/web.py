@@ -1,7 +1,7 @@
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func
@@ -13,20 +13,120 @@ from app.models.brew_session import BrewSession
 from app.models.device import Device, RigProfile
 from app.models.equipment import Equipment
 from app.models.fermentable import Fermentable
+from app.models.fermentation_reading import FermentationReading
 from app.models.hop import Hop
 from app.models.misc import Misc
 from app.models.recipe import Recipe, RecipeFermentable, RecipeHop, RecipeMisc, RecipeYeast
 from app.models.style import Style
 from app.models.yeast import Yeast
+from app.models.user import User
 import json
 from app.services import backup as backup_service
 from app.services import beerxml as beerxml_service
 from app.services import calc as calc_service
+from app.services import auth as auth_service
 
 TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
-router = APIRouter(include_in_schema=False)
+_public_router = APIRouter(include_in_schema=False)
+
+
+def get_current_user(request: Request, db: Session = Depends(get_db)) -> User | None:
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return None
+    return db.get(User, user_id)
+
+
+def require_auth(request: Request, db: Session = Depends(get_db)) -> User:
+    # First-run: no users exist yet
+    if db.query(User).count() == 0:
+        raise HTTPException(status_code=307, headers={"Location": "/setup"})
+    user_id = request.session.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=307, headers={"Location": f"/login?next={request.url.path}"})
+    user = db.get(User, user_id)
+    if not user or not user.is_active:
+        request.session.clear()
+        raise HTTPException(status_code=307, headers={"Location": "/login"})
+    return user
+
+
+router = APIRouter(include_in_schema=False, dependencies=[Depends(require_auth)])
+
+
+# ── Public auth routes (no authentication required) ───────────────────────────
+
+@_public_router.get("/login", response_class=HTMLResponse)
+def login_page(request: Request, next: str = "/", error: str = ""):
+    return templates.TemplateResponse(request, "login.html", {"next": next, "error": error})
+
+@_public_router.post("/login")
+async def login_submit(request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    username = form.get("username", "").strip()
+    password = form.get("password", "")
+    next_url = form.get("next", "/")
+    user = db.query(User).filter(User.username == username, User.is_active == True).first()
+    if not user or not auth_service.verify_password(password, user.password_hash):
+        return RedirectResponse(f"/login?next={next_url}&error=Invalid+username+or+password", status_code=303)
+    if user.totp_enabled:
+        request.session["pending_user_id"] = user.id
+        request.session["pending_next"] = next_url
+        return RedirectResponse("/login/2fa", status_code=303)
+    request.session["user_id"] = user.id
+    return RedirectResponse(next_url or "/", status_code=303)
+
+@_public_router.get("/login/2fa", response_class=HTMLResponse)
+def totp_page(request: Request, error: str = ""):
+    if "pending_user_id" not in request.session:
+        return RedirectResponse("/login", status_code=303)
+    return templates.TemplateResponse(request, "login_2fa.html", {"error": error})
+
+@_public_router.post("/login/2fa")
+async def totp_submit(request: Request, db: Session = Depends(get_db)):
+    pending_id = request.session.get("pending_user_id")
+    if not pending_id:
+        return RedirectResponse("/login", status_code=303)
+    form = await request.form()
+    code = form.get("code", "").replace(" ", "")
+    user = db.get(User, pending_id)
+    if not user or not auth_service.verify_totp(user.totp_secret, code):
+        return RedirectResponse("/login/2fa?error=Invalid+code", status_code=303)
+    next_url = request.session.pop("pending_next", "/")
+    request.session.pop("pending_user_id", None)
+    request.session["user_id"] = user.id
+    return RedirectResponse(next_url or "/", status_code=303)
+
+@_public_router.post("/logout")
+def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse("/login", status_code=303)
+
+@_public_router.get("/setup", response_class=HTMLResponse)
+def setup_page(request: Request, db: Session = Depends(get_db)):
+    if db.query(User).count() > 0:
+        return RedirectResponse("/login", status_code=303)
+    return templates.TemplateResponse(request, "setup.html", {})
+
+@_public_router.post("/setup")
+async def setup_submit(request: Request, db: Session = Depends(get_db)):
+    if db.query(User).count() > 0:
+        return RedirectResponse("/login", status_code=303)
+    form = await request.form()
+    username = form.get("username", "").strip()
+    password = form.get("password", "")
+    email = form.get("email", "").strip() or None
+    if not username or not password:
+        return templates.TemplateResponse(request, "setup.html", {"error": "Username and password are required."})
+    db.add(User(
+        username=username,
+        email=email,
+        password_hash=auth_service.hash_password(password),
+    ))
+    db.commit()
+    return RedirectResponse("/login", status_code=303)
 
 
 def _form_context(db: Session) -> dict:
@@ -861,6 +961,59 @@ async def settings_import_beerxml(request: Request, file: UploadFile = File(...)
     })
 
 
+@router.get("/settings/security", response_class=HTMLResponse)
+def security_settings(request: Request, db: Session = Depends(get_db),
+                       current_user: User = Depends(require_auth)):
+    secret = auth_service.generate_totp_secret()
+    totp_uri = auth_service.get_totp_uri(secret, current_user.username)
+    return templates.TemplateResponse(request, "settings_security.html", {
+        "page": "settings",
+        "current_user": current_user,
+        "totp_secret": secret,
+        "totp_uri": totp_uri,
+    })
+
+@router.post("/settings/security/enable-2fa")
+async def enable_2fa(request: Request, db: Session = Depends(get_db),
+                     current_user: User = Depends(require_auth)):
+    form = await request.form()
+    secret = form.get("totp_secret", "")
+    code = form.get("code", "").replace(" ", "")
+    if not auth_service.verify_totp(secret, code):
+        totp_uri = auth_service.get_totp_uri(secret, current_user.username)
+        return templates.TemplateResponse(request, "settings_security.html", {
+            "page": "settings",
+            "current_user": current_user,
+            "totp_secret": secret,
+            "totp_uri": totp_uri,
+            "error": "Invalid code — scan the QR code again and try once more.",
+        })
+    current_user.totp_secret = secret
+    current_user.totp_enabled = True
+    db.commit()
+    return RedirectResponse("/settings/security?enabled=1", status_code=303)
+
+@router.post("/settings/security/disable-2fa")
+def disable_2fa(request: Request, db: Session = Depends(get_db),
+                current_user: User = Depends(require_auth)):
+    current_user.totp_secret = None
+    current_user.totp_enabled = False
+    db.commit()
+    return RedirectResponse("/settings/security", status_code=303)
+
+@router.post("/settings/security/change-password")
+async def change_password(request: Request, db: Session = Depends(get_db),
+                          current_user: User = Depends(require_auth)):
+    form = await request.form()
+    current_pw = form.get("current_password", "")
+    new_pw = form.get("new_password", "")
+    if not auth_service.verify_password(current_pw, current_user.password_hash):
+        return RedirectResponse("/settings/security?pw_error=1", status_code=303)
+    current_user.password_hash = auth_service.hash_password(new_pw)
+    db.commit()
+    return RedirectResponse("/settings/security?pw_changed=1", status_code=303)
+
+
 # ── HTMX ingredient row partials ──────────────────────────────────────────────
 
 @router.get("/htmx/row/fermentable", response_class=HTMLResponse)
@@ -900,3 +1053,235 @@ def htmx_misc_row(index: int, request: Request, db: Session = Depends(get_db)):
 @router.get("/converter", response_class=HTMLResponse)
 def converter(request: Request):
     return templates.TemplateResponse(request, "converter.html", {"page": "converter"})
+
+
+# ── Inventory ─────────────────────────────────────────────────────────────────
+
+@router.get("/inventory", response_class=HTMLResponse)
+def inventory_page(request: Request, db: Session = Depends(get_db)):
+    return templates.TemplateResponse(request, "inventory.html", {
+        "fermentables": db.query(Fermentable).order_by(Fermentable.name).all(),
+        "hops": db.query(Hop).order_by(Hop.name).all(),
+        "yeasts": db.query(Yeast).order_by(Yeast.name).all(),
+        "miscs": db.query(Misc).order_by(Misc.name).all(),
+        "recipes": db.query(Recipe).order_by(Recipe.name).all(),
+        "page": "inventory",
+    })
+
+
+@router.post("/inventory/fermentable/{item_id}/stock")
+async def inventory_fermentable_stock(item_id: int, request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    qty = float(form.get("qty", 0))
+    item = db.get(Fermentable, item_id)
+    if item:
+        item.stock_qty = qty
+        db.commit()
+    return HTMLResponse(
+        f'<span id="stock-fermentable-{item_id}" class="badge bg-secondary px-2 py-1" '
+        f'style="min-width:60px;text-align:center;">{qty:.2f} kg</span>'
+    )
+
+
+@router.post("/inventory/hop/{item_id}/stock")
+async def inventory_hop_stock(item_id: int, request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    qty = float(form.get("qty", 0))
+    item = db.get(Hop, item_id)
+    if item:
+        item.stock_qty = qty
+        db.commit()
+    return HTMLResponse(
+        f'<span id="stock-hop-{item_id}" class="badge bg-secondary px-2 py-1" '
+        f'style="min-width:60px;text-align:center;">{qty:.1f} g</span>'
+    )
+
+
+@router.post("/inventory/yeast/{item_id}/stock")
+async def inventory_yeast_stock(item_id: int, request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    qty = float(form.get("qty", 0))
+    item = db.get(Yeast, item_id)
+    unit = item.stock_unit or "pkg" if item else "pkg"
+    if item:
+        item.stock_qty = qty
+        db.commit()
+    return HTMLResponse(
+        f'<span id="stock-yeast-{item_id}" class="badge bg-secondary px-2 py-1" '
+        f'style="min-width:60px;text-align:center;">{qty:.0f} {unit}</span>'
+    )
+
+
+@router.post("/inventory/misc/{item_id}/stock")
+async def inventory_misc_stock(item_id: int, request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    qty = float(form.get("qty", 0))
+    item = db.get(Misc, item_id)
+    unit = item.stock_unit or "g" if item else "g"
+    if item:
+        item.stock_qty = qty
+        db.commit()
+    return HTMLResponse(
+        f'<span id="stock-misc-{item_id}" class="badge bg-secondary px-2 py-1" '
+        f'style="min-width:60px;text-align:center;">{qty:.1f} {unit}</span>'
+    )
+
+
+@router.get("/inventory/check/{recipe_id}", response_class=HTMLResponse)
+def inventory_check(recipe_id: int, request: Request, db: Session = Depends(get_db)):
+    recipe = db.get(Recipe, recipe_id)
+    if not recipe:
+        return HTMLResponse('<p class="text-muted">Recipe not found.</p>')
+
+    rows = []
+
+    for rf in recipe.fermentables:
+        ferm = db.get(Fermentable, rf.fermentable_id)
+        if not ferm:
+            continue
+        needed = rf.amount_kg
+        have = ferm.stock_qty or 0.0
+        ok = have >= needed
+        rows.append({
+            "name": ferm.name,
+            "needed": f"{needed:.3f} kg",
+            "have": f"{have:.3f} kg",
+            "ok": ok,
+        })
+
+    for rh in recipe.hops:
+        hop = db.get(Hop, rh.hop_id)
+        if not hop:
+            continue
+        needed = rh.amount_g
+        have = hop.stock_qty or 0.0
+        ok = have >= needed
+        rows.append({
+            "name": hop.name,
+            "needed": f"{needed:.1f} g",
+            "have": f"{have:.1f} g",
+            "ok": ok,
+        })
+
+    for ry in recipe.yeasts:
+        yeast = db.get(Yeast, ry.yeast_id)
+        if not yeast:
+            continue
+        needed = ry.amount
+        have = yeast.stock_qty or 0.0
+        unit = yeast.stock_unit or "pkg"
+        ok = have >= needed
+        rows.append({
+            "name": yeast.name,
+            "needed": f"{needed:.0f} {unit}",
+            "have": f"{have:.0f} {unit}",
+            "ok": ok,
+        })
+
+    for rm in recipe.miscs:
+        misc = db.get(Misc, rm.misc_id)
+        if not misc:
+            continue
+        needed = rm.amount
+        have = misc.stock_qty or 0.0
+        unit = misc.stock_unit or "g"
+        ok = have >= needed
+        rows.append({
+            "name": misc.name,
+            "needed": f"{needed:.1f} {unit}",
+            "have": f"{have:.1f} {unit}",
+            "ok": ok,
+        })
+
+    if not rows:
+        return HTMLResponse('<p class="text-muted">No ingredients found for this recipe.</p>')
+
+    html_rows = ""
+    for row in rows:
+        icon = '<i class="bi bi-check-circle-fill text-success"></i>' if row["ok"] else '<i class="bi bi-x-circle-fill text-danger"></i>'
+        html_rows += (
+            f'<tr>'
+            f'<td>{row["name"]}</td>'
+            f'<td class="text-end">{row["needed"]}</td>'
+            f'<td class="text-end">{row["have"]}</td>'
+            f'<td class="text-center">{icon}</td>'
+            f'</tr>'
+        )
+
+    return HTMLResponse(
+        '<table class="table table-sm table-hover mb-0">'
+        '<thead class="table-light"><tr>'
+        '<th>Ingredient</th>'
+        '<th class="text-end">Required</th>'
+        '<th class="text-end">In Stock</th>'
+        '<th class="text-center">Status</th>'
+        '</tr></thead>'
+        f'<tbody>{html_rows}</tbody>'
+        '</table>'
+    )
+
+
+# ── Brew session detail + fermentation readings ───────────────────────────────
+
+@router.get("/brew-sessions/{session_id}", response_class=HTMLResponse)
+def brew_session_detail(session_id: int, request: Request, db: Session = Depends(get_db)):
+    session = db.query(BrewSession).options(
+        selectinload(BrewSession.recipe),
+        selectinload(BrewSession.fermentation_readings),
+    ).filter(BrewSession.id == session_id).first()
+    if not session:
+        return RedirectResponse("/brew-sessions", status_code=303)
+
+    readings_data = [
+        {
+            "x": r.recorded_at.isoformat(),
+            "gravity": r.gravity,
+            "temperature_c": r.temperature_c,
+        }
+        for r in session.fermentation_readings
+    ]
+    now_iso = datetime.utcnow().strftime("%Y-%m-%dT%H:%M")
+
+    return templates.TemplateResponse(request, "brew_sessions/detail.html", {
+        "session": session,
+        "readings_json": json.dumps(readings_data),
+        "now_iso": now_iso,
+        "page": "brew_sessions",
+    })
+
+
+@router.post("/brew-sessions/{session_id}/readings")
+async def brew_session_reading_create(session_id: int, request: Request, db: Session = Depends(get_db)):
+    session = db.get(BrewSession, session_id)
+    if not session:
+        return RedirectResponse("/brew-sessions", status_code=303)
+    form = await request.form()
+    recorded_at_str = form.get("recorded_at", "")
+    try:
+        recorded_at = datetime.strptime(recorded_at_str, "%Y-%m-%dT%H:%M")
+    except (ValueError, TypeError):
+        recorded_at = datetime.utcnow()
+    gravity_raw = form.get("gravity", "")
+    temp_raw = form.get("temperature_c", "")
+    db.add(FermentationReading(
+        session_id=session_id,
+        recorded_at=recorded_at,
+        gravity=float(gravity_raw) if gravity_raw else None,
+        temperature_c=float(temp_raw) if temp_raw else None,
+        notes=form.get("notes") or None,
+    ))
+    db.commit()
+    return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+
+
+@router.post("/brew-sessions/{session_id}/readings/{reading_id}/delete")
+def brew_session_reading_delete(session_id: int, reading_id: int, db: Session = Depends(get_db)):
+    reading = db.get(FermentationReading, reading_id)
+    if reading and reading.session_id == session_id:
+        db.delete(reading)
+        db.commit()
+    return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+
+
+# Export public (unauthenticated) router for main.py
+public_router = _public_router

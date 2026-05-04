@@ -21,3 +21,5 @@ class Hop(Base):
 
     notes = Column(Text)
     substitutes = Column(Text)
+
+    stock_qty = Column(Float, nullable=True, default=0.0)

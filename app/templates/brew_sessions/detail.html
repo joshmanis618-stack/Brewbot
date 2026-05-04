@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+{% block title %}{{ session.recipe.name if session.recipe else 'Session' }} — Brewbot{% endblock %}
+
+{% block content %}
+{% set status_colors = {
+  'planned': 'secondary',
+  'brewing': 'warning',
+  'fermenting': 'info',
+  'conditioning': 'primary',
+  'complete': 'success'
+} %}
+
+<!-- Breadcrumb + Header -->
+<nav aria-label="breadcrumb" class="mb-2">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/brew-sessions">Brew Sessions</a></li>
+    <li class="breadcrumb-item active">#{{ session.id }}</li>
+  </ol>
+</nav>
+
+<div class="page-header d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h1 class="mb-1">
+      <i class="bi bi-clipboard-data me-2 text-warning"></i>
+      {{ session.recipe.name if session.recipe else 'Unknown Recipe' }}
+    </h1>
+    <span class="badge bg-{{ status_colors.get(session.status, 'secondary') }} fs-6">
+      {{ session.status|title }}
+    </span>
+    {% if session.brew_date %}
+    <span class="text-muted ms-2 small">Brewed {{ session.brew_date.strftime('%Y-%m-%d') }}</span>
+    {% endif %}
+  </div>
+  <a href="/brew-sessions/{{ session.id }}/run" class="btn btn-outline-warning">
+    <i class="bi bi-play-fill me-1"></i>Run Session
+  </a>
+</div>
+
+<!-- Stats Row -->
+<div class="row g-3 mb-4">
+  {% set stats = [
+    ('OG', session.actual_og, session.recipe.og if session.recipe else None, '%.3f'),
+    ('FG', session.actual_fg, session.recipe.fg if session.recipe else None, '%.3f'),
+    ('ABV', session.actual_abv, session.recipe.abv if session.recipe else None, '%.1f%%'),
+  ] %}
+  {% for label, actual, target, fmt in stats %}
+  <div class="col-6 col-md-2">
+    <div class="card text-center h-100">
+      <div class="card-body py-3">
+        <div class="small text-muted mb-1">{{ label }}</div>
+        <div class="fw-bold fs-5">
+          {% if actual %}{{ fmt|format(actual) if '%' not in fmt else fmt|format(actual) }}{% else %}—{% endif %}
+        </div>
+        {% if target %}
+        <div class="small text-muted">target: {{ fmt|format(target) if '%' not in fmt else fmt|format(target) }}</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+  <div class="col-6 col-md-2">
+    <div class="card text-center h-100">
+      <div class="card-body py-3">
+        <div class="small text-muted mb-1">Volume (L)</div>
+        <div class="fw-bold fs-5">{{ session.actual_batch_size_l or '—' }}</div>
+        {% if session.recipe and session.recipe.batch_size_l %}
+        <div class="small text-muted">target: {{ session.recipe.batch_size_l }}</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="card text-center h-100">
+      <div class="card-body py-3">
+        <div class="small text-muted mb-1">Efficiency</div>
+        <div class="fw-bold fs-5">
+          {% if session.actual_efficiency %}{{ session.actual_efficiency|round|int }}%{% else %}—{% endif %}
+        </div>
+        {% if session.recipe and session.recipe.efficiency %}
+        <div class="small text-muted">target: {{ session.recipe.efficiency|round|int }}%</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Fermentation Chart -->
+<div class="card mb-4">
+  <div class="card-header fw-semibold">
+    <i class="bi bi-graph-up me-1"></i>Fermentation
+  </div>
+  <div class="card-body">
+    {% if session.fermentation_readings %}
+    <canvas id="fermentationChart" style="height:300px;max-height:300px;"></canvas>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-graph-up fs-1 d-block mb-2"></i>
+      No readings yet — log your first gravity or temperature reading below.
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Log Reading Form -->
+<div class="card mb-4">
+  <div class="card-header fw-semibold">
+    <i class="bi bi-pencil-square me-1"></i>Log Reading
+  </div>
+  <div class="card-body">
+    <form method="post" action="/brew-sessions/{{ session.id }}/readings">
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label">Date &amp; Time</label>
+          <input type="datetime-local" name="recorded_at" class="form-control"
+                 value="{{ now_iso }}" required>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Gravity (SG)</label>
+          <input type="number" name="gravity" class="form-control"
+                 step="0.001" min="0.990" max="1.200" placeholder="e.g. 1.050">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Temperature (°C)</label>
+          <input type="number" name="temperature_c" class="form-control"
+                 step="0.1" placeholder="e.g. 20.0">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Notes</label>
+          <input type="text" name="notes" class="form-control" placeholder="Optional note" maxlength="200">
+        </div>
+        <div class="col-md-1 d-flex align-items-end">
+          <button type="submit" class="btn btn-brew w-100">Add</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Readings Table -->
+{% if session.fermentation_readings %}
+<div class="card">
+  <div class="card-header fw-semibold">
+    <i class="bi bi-table me-1"></i>Readings
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Date / Time</th>
+          <th class="text-end">Gravity (SG)</th>
+          <th class="text-end">Temp (°C)</th>
+          <th>Notes</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in session.fermentation_readings|reverse %}
+        <tr>
+          <td>{{ r.recorded_at.strftime('%Y-%m-%d %H:%M') }}</td>
+          <td class="text-end">{{ "%.3f"|format(r.gravity) if r.gravity else '—' }}</td>
+          <td class="text-end">{{ "%.1f"|format(r.temperature_c) if r.temperature_c else '—' }}</td>
+          <td><small class="text-muted">{{ r.notes or '—' }}</small></td>
+          <td class="text-end">
+            <form method="post"
+                  action="/brew-sessions/{{ session.id }}/readings/{{ r.id }}/delete"
+                  class="d-inline"
+                  onsubmit="return confirm('Delete this reading?')">
+              <button type="submit" class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+{% if session.fermentation_readings %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+  const readings = {{ readings_json|safe }};
+  if (!readings.length) return;
+
+  const labels = readings.map(r => r.x);
+  const gravityData = readings.map(r => r.gravity);
+  const tempData = readings.map(r => r.temperature_c);
+
+  const ctx = document.getElementById('fermentationChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Gravity (SG)',
+          data: gravityData,
+          borderColor: '#f59e0b',
+          backgroundColor: 'rgba(245,158,11,0.1)',
+          borderWidth: 2,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          tension: 0.3,
+          yAxisID: 'yGravity',
+          spanGaps: true,
+        },
+        {
+          label: 'Temperature (°C)',
+          data: tempData,
+          borderColor: '#3b82f6',
+          backgroundColor: 'rgba(59,130,246,0.08)',
+          borderWidth: 2,
+          borderDash: [6, 3],
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          tension: 0.3,
+          yAxisID: 'yTemp',
+          spanGaps: true,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: 'index',
+        intersect: false,
+      },
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              if (ctx.dataset.yAxisID === 'yGravity') {
+                return ctx.dataset.label + ': ' + (ctx.parsed.y != null ? ctx.parsed.y.toFixed(3) : '—');
+              }
+              return ctx.dataset.label + ': ' + (ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) + ' °C' : '—');
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: {
+            maxTicksLimit: 10,
+            maxRotation: 30,
+            callback: function(value, index) {
+              const lbl = this.getLabelForValue(value);
+              return lbl ? lbl.replace('T', ' ').slice(0, 16) : '';
+            }
+          }
+        },
+        yGravity: {
+          type: 'linear',
+          position: 'left',
+          min: 0.990,
+          max: 1.120,
+          title: { display: true, text: 'Gravity (SG)' },
+          ticks: {
+            callback: v => v.toFixed(3)
+          }
+        },
+        yTemp: {
+          type: 'linear',
+          position: 'right',
+          title: { display: true, text: 'Temperature (°C)' },
+          grid: { drawOnChartArea: false },
+        }
+      }
+    }
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

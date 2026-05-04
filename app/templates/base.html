@@ -42,6 +42,11 @@
           </a>
         </li>
         <li class="nav-item">
+          <a class="nav-link rounded px-3 {% if page == 'inventory' %}active{% endif %}" href="/inventory">
+            <i class="bi bi-box-seam me-1"></i>Inventory
+          </a>
+        </li>
+        <li class="nav-item">
           <a class="nav-link rounded px-3 {% if page == 'devices' %}active{% endif %}" href="/devices">
             <i class="bi bi-cpu me-1"></i>Controller
           </a>
@@ -67,17 +72,24 @@
           </a>
         </li>
       </ul>
-      <button id="dark-toggle" class="btn btn-outline-light btn-sm me-1"
-              onclick="toggleDark()" title="Toggle dark mode">
-        <i class="bi bi-moon-fill" id="dark-icon"></i>
-      </button>
-      <button class="btn btn-outline-light btn-sm me-2"
-              data-bs-toggle="offcanvas" data-bs-target="#helpOffcanvas" aria-label="Help">
-        <i class="bi bi-question-circle"></i>
-      </button>
-      <a href="/docs" class="btn btn-outline-secondary btn-sm" target="_blank">
-        <i class="bi bi-code-slash me-1"></i>API
-      </a>
+      <div class="d-flex align-items-center gap-2">
+        <button id="dark-toggle" class="btn btn-outline-light btn-sm"
+                onclick="toggleDark()" title="Toggle dark mode">
+          <i class="bi bi-moon-fill" id="dark-icon"></i>
+        </button>
+        <button class="btn btn-outline-light btn-sm"
+                data-bs-toggle="offcanvas" data-bs-target="#helpOffcanvas" aria-label="Help">
+          <i class="bi bi-question-circle"></i>
+        </button>
+        <a href="/docs" class="btn btn-outline-secondary btn-sm" target="_blank">
+          <i class="bi bi-code-slash me-1"></i>API
+        </a>
+        <form method="post" action="/logout" class="mb-0">
+          <button class="btn btn-outline-light btn-sm" title="Log out">
+            <i class="bi bi-box-arrow-right"></i>
+          </button>
+        </form>
+      </div>
     </div>
   </div>
 </nav>

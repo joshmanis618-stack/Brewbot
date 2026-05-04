@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, Float, Text
 from .base import Base
 
 
+
 class Yeast(Base):
     """Ingredient library entry for yeast strains."""
     __tablename__ = "yeasts"
@@ -20,3 +21,6 @@ class Yeast(Base):
     best_for = Column(Text)
 
     notes = Column(Text)
+
+    stock_qty = Column(Float, nullable=True, default=0.0)
+    stock_unit = Column(String(10), nullable=True, default="pkg")
