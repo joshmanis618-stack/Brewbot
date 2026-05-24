@@ -24,12 +24,12 @@
         <div class="card-header fw-semibold">Basic Info</div>
         <div class="card-body">
           <div class="row g-3">
-            <div class="col-md-6">
+            <div class="col-md-7">
               <label class="form-label">Recipe Name <span class="text-danger">*</span></label>
               <input type="text" name="name" class="form-control" required
                      value="{{ recipe.name if recipe else '' }}" placeholder="e.g. Hoppy IPA">
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
               <label class="form-label">Craft</label>
               <select name="craft" id="craft-select" class="form-select" onchange="updateCraftSections()">
                 {% for c in [('beer','🍺 Beer'),('wine','🍷 Wine'),('spirits','🥃 Spirits')] %}
@@ -37,15 +37,15 @@
                 {% endfor %}
               </select>
             </div>
+
+            <!-- Type: beer = All Grain / Extract / Partial Mash; spirits = Grain / Fruit / Molasses / Agave; hidden for wine -->
             <div class="col-md-3" id="type-field">
-              <label class="form-label">Type</label>
-              <select name="type" class="form-select">
-                {% for t in ['All Grain','Extract','Partial Mash'] %}
-                <option value="{{ t }}" {{ 'selected' if recipe and recipe.type == t }}>{{ t }}</option>
-                {% endfor %}
-              </select>
+              <label class="form-label" id="type-label">Type</label>
+              <select name="type" id="type-select" class="form-select"></select>
             </div>
-            <div class="col-md-6">
+
+            <!-- Style: beer uses DB-driven select; wine/spirits use JS-built grouped selects -->
+            <div class="col-md-6" id="style-field-beer">
               <label class="form-label">Style</label>
               <select name="style_id" class="form-select" onchange="updateStyleTargets()">
                 <option value="">— None —</option>
@@ -62,6 +62,20 @@
                 {% endfor %}
               </select>
             </div>
+            <div class="col-md-6" id="style-field-wine" style="display:none;">
+              <label class="form-label">Wine Style</label>
+              <select name="wine_style" id="wine-style-select" class="form-select">
+                <option value="">— None —</option>
+              </select>
+            </div>
+            <div class="col-md-6" id="style-field-spirits" style="display:none;">
+              <label class="form-label">Spirits Style</label>
+              <select name="spirits_style" id="spirits-style-select" class="form-select">
+                <option value="">— None —</option>
+              </select>
+            </div>
+
+            <!-- Equipment: craft-filtered -->
             <div class="col-md-6">
               <label class="form-label">Equipment Profile</label>
               <select name="equipment_id" id="equipment_select" class="form-select"
@@ -69,6 +83,7 @@
                 <option value="">— None —</option>
                 {% for e in equipment_list %}
                 <option value="{{ e.id }}"
+                        data-craft="{{ e.craft or 'beer' }}"
                         data-batch="{{ e.batch_size_l }}" data-boil="{{ e.boil_size_l }}"
                         data-time="{{ e.boil_time_min }}" data-efficiency="{{ e.efficiency }}"
                         {{ 'selected' if recipe and recipe.equipment_id == e.id }}>
@@ -77,31 +92,32 @@
                 {% endfor %}
               </select>
             </div>
+
             <div class="col-md-3">
               <label class="form-label">
-                Batch Size (<span data-ulabel="L|gal">L</span>) <span class="text-danger">*</span>
+                <span id="batch-label">Batch Size</span> (<span data-ulabel="L|gal">L</span>) <span class="text-danger">*</span>
               </label>
               <input type="number" name="batch_size_l" id="batch_size_l" class="form-control"
                      step="0.1" required oninput="recalculate()" data-utype="vol"
                      value="{{ recipe.batch_size_l if recipe else '19' }}">
             </div>
-            <div class="col-md-3">
+            <div class="col-md-3" id="boil-size-group">
               <label class="form-label">
-                Pre-boil Volume (<span data-ulabel="L|gal">L</span>)
+                <span id="boil-label">Pre-boil Volume</span> (<span data-ulabel="L|gal">L</span>)
               </label>
               <input type="number" name="boil_size_l" id="boil_size_l" class="form-control"
                      step="0.1" data-utype="vol"
                      value="{{ recipe.boil_size_l if recipe else '' }}"
                      placeholder="{{ recipe.boil_size_l if recipe else '26' }}">
             </div>
-            <div class="col-md-3">
-              <label class="form-label">Boil Time (min)</label>
+            <div class="col-md-3" id="boil-time-group">
+              <label class="form-label" id="boil-time-label">Boil Time (min)</label>
               <input type="number" name="boil_time_min" id="boil_time_min" class="form-control"
                      oninput="recalculate()"
                      value="{{ recipe.boil_time_min if recipe else '60' }}">
             </div>
             <div class="col-md-3">
-              <label class="form-label">Efficiency (%)</label>
+              <label class="form-label" id="efficiency-label">Efficiency (%)</label>
               <input type="number" name="efficiency" id="efficiency" class="form-control"
                      step="0.1" oninput="recalculate()"
                      value="{{ recipe.efficiency if recipe else '75' }}">
@@ -192,6 +208,55 @@
         </div>
         <div class="text-center text-muted py-3 small {{ 'd-none' if recipe and recipe.grapes }}">
           No grapes added yet
+        </div>
+      </div>
+
+      <!-- Mash Schedule (beer / spirits) -->
+      <div class="card mb-4" data-craft="beer,spirits">
+        <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
+          <span><i class="bi bi-thermometer-half me-2"></i>Mash Schedule</span>
+          <button type="button" class="btn btn-brew btn-sm" onclick="addIngredientRow('mash_step')">
+            <i class="bi bi-plus-lg me-1"></i>Add Step
+          </button>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm mb-0 ingredient-table">
+            <thead><tr>
+              <th style="width:32px;">#</th>
+              <th style="min-width:130px;">Step Name</th>
+              <th style="width:100px;">Temp (°C)</th>
+              <th style="width:90px;">Time (min)</th>
+              <th style="min-width:160px;">Additions</th>
+              <th style="min-width:140px;">Notes</th>
+              <th style="width:44px;"></th>
+            </tr></thead>
+            <tbody id="mash_steps-tbody">
+              {% if recipe %}
+              {% for ms in recipe.mash_steps %}
+              <tr data-row-type="mash_step">
+                <td class="text-muted small align-middle">{{ ms.step_number }}</td>
+                <td><input name="mash_name_{{ loop.index0 }}" type="text"
+                           class="form-control form-control-sm" value="{{ ms.name or '' }}"
+                           placeholder="e.g. Cereal Cook"></td>
+                <td><input name="mash_temp_c_{{ loop.index0 }}" type="number" step="0.5"
+                           class="form-control form-control-sm" value="{{ ms.temp_c }}" required></td>
+                <td><input name="mash_time_min_{{ loop.index0 }}" type="number"
+                           class="form-control form-control-sm" value="{{ ms.time_min }}" required></td>
+                <td><input name="mash_additions_{{ loop.index0 }}" type="text"
+                           class="form-control form-control-sm" value="{{ ms.additions or '' }}"
+                           placeholder="α-amylase, corn…"></td>
+                <td><input name="mash_notes_{{ loop.index0 }}" type="text"
+                           class="form-control form-control-sm" value="{{ ms.notes or '' }}"></td>
+                <td><button type="button" class="btn btn-sm btn-outline-danger"
+                            onclick="removeRow(this)"><i class="bi bi-x"></i></button></td>
+              </tr>
+              {% endfor %}
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+        <div id="mash_steps-empty" class="text-center text-muted py-3 small {{ 'd-none' if recipe and recipe.mash_steps }}">
+          No mash steps yet — add a step to define your mash schedule
         </div>
       </div>
 
@@ -500,15 +565,216 @@
 
 {% block scripts %}
 <script>
+// ── Wine styles: [value, 'American Varietal / European Regional'] ─────────────
+const WINE_STYLES = [
+  ['Red', [
+    ['Cabernet Sauvignon', 'Cabernet Sauvignon / Bordeaux Rouge, Médoc'],
+    ['Merlot',             'Merlot / Saint-Émilion, Pomerol'],
+    ['Pinot Noir',         'Pinot Noir / Burgundy Rouge, Côte de Nuits'],
+    ['Syrah / Shiraz',     'Syrah / Northern Rhône (Hermitage), Shiraz'],
+    ['Zinfandel',          'Zinfandel / Primitivo'],
+    ['Cabernet Franc',     'Cabernet Franc / Chinon, Bourgueil'],
+    ['Nebbiolo',           'Nebbiolo / Barolo, Barbaresco'],
+    ['Sangiovese',         'Sangiovese / Chianti, Brunello di Montalcino'],
+    ['Tempranillo',        'Tempranillo / Rioja, Ribera del Duero'],
+    ['Grenache',           'Grenache / Châteauneuf-du-Pape, Priorat'],
+    ['Malbec',             'Malbec / Cahors, Mendoza'],
+    ['Mourvèdre',          'Mourvèdre / Bandol, Monastrell'],
+  ]],
+  ['White', [
+    ['Chardonnay',         'Chardonnay / White Burgundy, Chablis, Meursault'],
+    ['Sauvignon Blanc',    'Sauvignon Blanc / Sancerre, Pouilly-Fumé'],
+    ['Riesling',           'Riesling / Mosel, Alsace, Rheingau'],
+    ['Pinot Gris',         'Pinot Gris / Alsace Pinot Gris, Pinot Grigio'],
+    ['Gewürztraminer',     'Gewürztraminer / Alsace Gewürztraminer'],
+    ['Viognier',           'Viognier / Condrieu'],
+    ['Chenin Blanc',       'Chenin Blanc / Vouvray, Savennières'],
+    ['Grüner Veltliner',   'Grüner Veltliner / Wachau, Kamptal'],
+    ['Albariño',           'Albariño / Rías Baixas, Vinho Verde'],
+    ['Vermentino',         'Vermentino / Sardinia, Provence Blanc'],
+    ['Muscat Blanc',       'Muscat Blanc / Muscat d\'Alsace, Moscato d\'Asti'],
+  ]],
+  ['Rosé', [
+    ['Provence Rosé',      'Provence Rosé (Grenache / Mourvèdre / Cinsault)'],
+    ['Tavel Rosé',         'Tavel (Grenache-dominant Rhône Rosé)'],
+    ['Pinot Noir Rosé',    'Pinot Noir Rosé / Vin Gris de Pinot'],
+    ['White Zinfandel',    'White Zinfandel / Blush'],
+  ]],
+  ['Sparkling', [
+    ['Traditional Method', 'Champagne Method / Crémant, Cava, Franciacorta'],
+    ['Charmat Method',     'Charmat / Prosecco, Lambrusco'],
+    ['Pétillant Naturel',  'Pétillant Naturel / Méthode Ancestrale'],
+    ['Force Carbonated',   'Force Carbonated Sparkling'],
+  ]],
+  ['Orange & Skin-Contact', [
+    ['Orange Wine',        'Orange Wine (Skin-Contact White)'],
+    ['Amber Wine',         'Amber Wine (Extended Maceration White, Georgian Kvevri)'],
+  ]],
+  ['Dessert & Fortified', [
+    ['Late Harvest',       'Late Harvest / Spätlese, Auslese, Vendanges Tardives'],
+    ['Icewine / Eiswein',  'Icewine / Eiswein'],
+    ['Sauternes Style',    'Botrytis / Sauternes, Beerenauslese, Tokaji'],
+    ['Port Style',         'Port Style / Ruby, Tawny, Vintage'],
+    ['Sherry Style',       'Sherry Style / Fino, Amontillado, Oloroso'],
+    ['Madeira Style',      'Madeira Style / Sercial, Bual, Malmsey'],
+  ]],
+];
+
+// ── Spirits styles: [group, [[value, label], …]] ──────────────────────────────
+const SPIRITS_STYLES = [
+  ['Whiskey', [
+    ['Bourbon',            'Bourbon (American Corn Whiskey)'],
+    ['Tennessee Whiskey',  'Tennessee Whiskey'],
+    ['Rye Whiskey',        'Rye Whiskey (American)'],
+    ['Single Malt Scotch', 'Single Malt Scotch (Highland, Islay, Speyside…)'],
+    ['Blended Scotch',     'Blended Scotch'],
+    ['Irish Whiskey',      'Irish Whiskey'],
+    ['Japanese Whisky',    'Japanese Whisky'],
+    ['Canadian Whisky',    'Canadian Whisky'],
+    ['Corn Whiskey',       'Moonshine / White Corn Whiskey'],
+  ]],
+  ['Brandy', [
+    ['Cognac',             'Cognac (French Grape Brandy)'],
+    ['Armagnac',           'Armagnac'],
+    ['American Brandy',    'American Brandy'],
+    ['Calvados',           'Calvados (Apple Brandy)'],
+    ['Applejack',          'Applejack / Freeze-Distilled Cider'],
+    ['Grappa',             'Grappa / Marc (Pomace Brandy)'],
+    ['Pisco',              'Pisco (South American Grape Brandy)'],
+    ['Fruit Brandy',       'Fruit Brandy / Eau-de-Vie'],
+  ]],
+  ['Rum', [
+    ['White Rum',          'Light / White Rum'],
+    ['Gold Rum',           'Gold / Amber Rum'],
+    ['Dark Rum',           'Dark Rum'],
+    ['Spiced Rum',         'Spiced Rum'],
+    ['Agricole Rhum',      'Rhum Agricole (Fresh Cane Juice)'],
+    ['Demerara Rum',       'Demerara Rum (Guyana)'],
+    ['Cachaca',            'Cachaça (Brazilian Sugarcane Spirit)'],
+  ]],
+  ['Vodka', [
+    ['Grain Vodka',        'Grain Vodka (Wheat / Rye / Corn)'],
+    ['Potato Vodka',       'Potato Vodka'],
+    ['Rye Vodka',          'Rye Vodka'],
+    ['Flavored Vodka',     'Flavored Vodka'],
+  ]],
+  ['Gin', [
+    ['London Dry Gin',     'London Dry Gin'],
+    ['American Gin',       'American / New Western Gin'],
+    ['Old Tom Gin',        'Old Tom Gin (Slightly Sweet)'],
+    ['Genever',            'Genever / Jenever (Dutch Gin)'],
+    ['Sloe Gin',           'Sloe Gin (Fruit Liqueur)'],
+    ['Navy Strength Gin',  'Navy Strength Gin (57%+ ABV)'],
+  ]],
+  ['Agave', [
+    ['Blanco Tequila',     'Blanco Tequila (Unaged)'],
+    ['Reposado Tequila',   'Reposado Tequila (2–12 months oak)'],
+    ['Añejo Tequila',      'Añejo Tequila (1–3 years oak)'],
+    ['Mezcal',             'Mezcal (Roasted Agave)'],
+    ['Sotol',              'Sotol (Desert Spoon)'],
+    ['Raicilla',           'Raicilla (Jalisco Mezcal variant)'],
+  ]],
+  ['Liqueur & Other', [
+    ['Absinthe',           'Absinthe (Wormwood / Anise)'],
+    ['Aquavit',            'Aquavit (Caraway / Dill)'],
+    ['Triple Sec',         'Triple Sec / Curaçao (Orange Liqueur)'],
+    ['Coffee Liqueur',     'Coffee Liqueur'],
+    ['Herbal Liqueur',     'Herbal / Botanical Liqueur'],
+    ['Amaro',              'Amaro (Italian Bitter Liqueur)'],
+    ['Cream Liqueur',      'Cream Liqueur'],
+    ['Soju',               'Soju / Shochu'],
+    ['Baijiu',             'Baijiu (Chinese Grain Spirit)'],
+  ]],
+];
+
+function _buildGroupedSelect(selectEl, groups, savedValue) {
+  while (selectEl.options.length > 1) selectEl.remove(1);
+  groups.forEach(([groupLabel, opts]) => {
+    const og = document.createElement('optgroup');
+    og.label = groupLabel;
+    opts.forEach(([val, label]) => {
+      const o = document.createElement('option');
+      o.value = val;
+      o.textContent = label;
+      if (val === savedValue) o.selected = true;
+      og.appendChild(o);
+    });
+    selectEl.appendChild(og);
+  });
+}
+
+const CRAFT_FIELD_LABELS = {
+  beer:    { batch: 'Batch Size', boil: 'Pre-boil Volume', time: 'Boil Time (min)', eff: 'Mash Efficiency (%)' },
+  wine:    { batch: 'Target Yield', boil: 'Must / Crush Volume', time: 'Press / Run Time (min)', eff: 'Juice Yield (%)' },
+  spirits: { batch: 'Still Charge', boil: 'Low Wines Volume', time: 'Run Time (min)', eff: 'Spirit Yield (%)' },
+};
+
+const CRAFT_TYPE_OPTIONS = {
+  beer:    [['All Grain','All Grain'],['Extract','Extract'],['Partial Mash','Partial Mash']],
+  spirits: [['All Grain','Grain Mash'],['Fruit','Fruit Wash'],['Molasses','Molasses / Sugar Base'],['Agave','Agave Base']],
+  wine:    [],
+};
+
 // ── Craft visibility ──────────────────────────────────────────────────────────
 function updateCraftSections() {
   const craft = document.getElementById('craft-select').value;
-  document.querySelectorAll('[data-craft]').forEach(el => {
+
+  // Show/hide craft-specific cards (not option elements which also use data-craft for equipment filtering)
+  document.querySelectorAll('.card[data-craft]').forEach(el => {
     const crafts = el.dataset.craft.split(',');
     el.style.display = crafts.includes(craft) ? '' : 'none';
   });
+
+  // Style dropdowns
+  document.getElementById('style-field-beer').style.display    = craft === 'beer'    ? '' : 'none';
+  document.getElementById('style-field-wine').style.display    = craft === 'wine'    ? '' : 'none';
+  document.getElementById('style-field-spirits').style.display = craft === 'spirits' ? '' : 'none';
+
+  // Type dropdown
+  const typeField  = document.getElementById('type-field');
+  const typeSelect = document.getElementById('type-select');
+  const typeOpts   = CRAFT_TYPE_OPTIONS[craft] || [];
+  if (typeOpts.length === 0) {
+    typeField.style.display = 'none';
+  } else {
+    typeField.style.display = '';
+    const cur = typeSelect.value;
+    typeSelect.innerHTML = '';
+    typeOpts.forEach(([val, lbl]) => {
+      const o = document.createElement('option');
+      o.value = val; o.textContent = lbl;
+      if (val === cur) o.selected = true;
+      typeSelect.appendChild(o);
+    });
+  }
+
+  // Field labels per craft
+  const labels = CRAFT_FIELD_LABELS[craft] || CRAFT_FIELD_LABELS.beer;
+  document.getElementById('batch-label').textContent     = labels.batch;
+  document.getElementById('boil-label').textContent      = labels.boil;
+  document.getElementById('boil-time-label').textContent = labels.time;
+  document.getElementById('efficiency-label').textContent = labels.eff;
+
+  // Equipment filter by craft
+  const eqSel = document.getElementById('equipment_select');
+  Array.from(eqSel.options).forEach(opt => {
+    if (!opt.value) return;
+    opt.hidden = opt.dataset.craft !== craft;
+    if (opt.hidden && opt.selected) { eqSel.value = ''; }
+  });
 }
-document.addEventListener('DOMContentLoaded', updateCraftSections);
+document.addEventListener('DOMContentLoaded', () => {
+  // Build wine + spirits style dropdowns with saved values
+  const savedWineStyle    = {{ ('"' + recipe.wine_style + '"') if recipe and recipe.wine_style else 'null' }};
+  const savedSpiritsStyle = {{ ('"' + recipe.spirits_style + '"') if recipe and recipe.spirits_style else 'null' }};
+  _buildGroupedSelect(document.getElementById('wine-style-select'),    WINE_STYLES,    savedWineStyle);
+  _buildGroupedSelect(document.getElementById('spirits-style-select'), SPIRITS_STYLES, savedSpiritsStyle);
+
+  // Restore type select saved value
+  const savedType = {{ ('"' + recipe.type + '"') if recipe and recipe.type else '"All Grain"' }};
+  updateCraftSections();
+  document.getElementById('type-select').value = savedType;
+});
 
 // ── Row counters ──────────────────────────────────────────────────────────────
 _rowCounters['fermentable'] = document.querySelectorAll('[data-row-type="fermentable"]').length;
@@ -516,6 +782,7 @@ _rowCounters['hop']         = document.querySelectorAll('[data-row-type="hop"]')
 _rowCounters['yeast']       = document.querySelectorAll('[data-row-type="yeast"]').length;
 _rowCounters['misc']        = document.querySelectorAll('[data-row-type="misc"]').length;
 _rowCounters['grape']       = document.querySelectorAll('[data-row-type="grape"]').length;
+_rowCounters['mash_step']   = document.querySelectorAll('[data-row-type="mash_step"]').length;
 
 // Override removeRow to trigger recalculate
 const _baseRemove = window.removeRow;

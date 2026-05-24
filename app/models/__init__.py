@@ -13,6 +13,7 @@ from .brew_program import BrewProgram, BrewStep, BrewStepCommand, BrewSessionSte
 from .fermentation_reading import FermentationReading
 from .barrel import Barrel, BarrelAgingRecord, BarrelAgingEntry
 from .grape_variety import GrapeVariety, RecipeGrape
+from .mash_step import MashStep
 
 __all__ = [
     "Base",
@@ -42,4 +43,5 @@ __all__ = [
     "BarrelAgingEntry",
     "GrapeVariety",
     "RecipeGrape",
+    "MashStep",
 ]

@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Equipment — Brewbot{% endblock %}
 
+{% set craft_icons = {'beer': '🍺', 'wine': '🍷', 'spirits': '🥃'} %}
+
 {% block content %}
 <div class="page-header">
   <h1><i class="bi bi-tools me-2 text-warning"></i>Equipment</h1>
@@ -15,14 +17,24 @@
   <div class="col-md-6 col-xl-4">
     <div class="card h-100">
       <div class="card-body">
-        <h5 class="card-title mb-3">{{ item.name }}</h5>
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <h5 class="card-title mb-0">{{ item.name }}</h5>
+          <span class="badge bg-secondary">{{ craft_icons.get(item.craft or 'beer', '🍺') }} {{ (item.craft or 'beer')|title }}</span>
+        </div>
+        {% if item.still_type %}
+        <p class="small text-muted mb-2"><i class="bi bi-fire me-1"></i>{{ item.still_type }}</p>
+        {% endif %}
         <table class="table table-sm mb-0">
           <tbody>
-            <tr><td class="text-muted">Batch size</td><td class="fw-semibold">{{ item.batch_size_l }} L</td></tr>
-            <tr><td class="text-muted">Pre-boil vol.</td><td class="fw-semibold">{{ item.boil_size_l }} L</td></tr>
-            <tr><td class="text-muted">Boil time</td><td class="fw-semibold">{{ item.boil_time_min }} min</td></tr>
+            <tr><td class="text-muted">Batch / target vol.</td><td class="fw-semibold">{{ item.batch_size_l }} L</td></tr>
+            {% if item.boil_size_l %}
+            <tr><td class="text-muted">Pre-boil / charge vol.</td><td class="fw-semibold">{{ item.boil_size_l }} L</td></tr>
+            {% endif %}
+            {% if item.boil_time_min %}
+            <tr><td class="text-muted">Boil / run time (min)</td><td class="fw-semibold">{{ item.boil_time_min }}</td></tr>
+            {% endif %}
             <tr><td class="text-muted">Efficiency</td><td class="fw-semibold">{{ item.efficiency }}%</td></tr>
-            <tr><td class="text-muted">Trub loss</td><td class="fw-semibold">{{ item.trub_chiller_loss_l }} L</td></tr>
+            <tr><td class="text-muted">Trub / lees loss</td><td class="fw-semibold">{{ item.trub_chiller_loss_l }} L</td></tr>
           </tbody>
         </table>
         {% if item.notes %}
@@ -46,7 +58,7 @@
   <div class="empty-state">
     <i class="bi bi-tools text-muted"></i>
     <p class="fw-semibold mb-1">No equipment profiles yet</p>
-    <p class="small text-muted mb-3">Add your brew rig's specs so recipes can calculate accurately.</p>
+    <p class="small text-muted mb-3">Add your brew rig, winery setup, or still specs so recipes can calculate accurately.</p>
     <button class="btn btn-brew btn-sm" data-bs-toggle="modal" data-bs-target="#newEquipModal">
       Add Equipment Profile
     </button>
@@ -65,33 +77,58 @@
         </div>
         <div class="modal-body">
           <div class="row g-3">
-            <div class="col-12">
+            <div class="col-md-8">
               <label class="form-label">Profile Name <span class="text-danger">*</span></label>
-              <input type="text" name="name" class="form-control" required placeholder="e.g. 3-Vessel HERMS 40L">
-            </div>
-            <div class="col-md-6">
-              <label class="form-label">Batch Size (L) <span class="text-danger">*</span></label>
-              <input type="number" name="batch_size_l" class="form-control" step="0.5" required placeholder="19">
-            </div>
-            <div class="col-md-6">
-              <label class="form-label">Pre-boil Volume (L) <span class="text-danger">*</span></label>
-              <input type="number" name="boil_size_l" class="form-control" step="0.5" required placeholder="25">
+              <input type="text" name="name" class="form-control" required
+                     placeholder="e.g. 3-Vessel HERMS 40L, Pot Still 50L, Oak Barrel Fermenter">
             </div>
             <div class="col-md-4">
-              <label class="form-label">Boil Time (min)</label>
+              <label class="form-label">Craft</label>
+              <select name="craft" id="equip-craft-select" class="form-select"
+                      onchange="updateEquipFields(this.value)">
+                <option value="beer">🍺 Beer</option>
+                <option value="wine">🍷 Wine</option>
+                <option value="spirits">🥃 Spirits</option>
+              </select>
+            </div>
+
+            <!-- Spirits: still type -->
+            <div class="col-md-12" id="still-type-field" style="display:none;">
+              <label class="form-label">Still Type</label>
+              <select name="still_type" class="form-select">
+                <option value="">— Select —</option>
+                <option>Pot Still</option>
+                <option>Column / Reflux Still</option>
+                <option>Hybrid Still</option>
+                <option>Alembic (Cognac Style)</option>
+                <option>Continuous Column</option>
+              </select>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label" id="batch-size-label">Batch Size (L) <span class="text-danger">*</span></label>
+              <input type="number" name="batch_size_l" class="form-control" step="0.5" required placeholder="19">
+            </div>
+            <div class="col-md-6" id="boil-size-group">
+              <label class="form-label" id="boil-size-label">Pre-boil Volume (L)</label>
+              <input type="number" name="boil_size_l" class="form-control" step="0.5" placeholder="25">
+            </div>
+            <div class="col-md-4" id="boil-time-group">
+              <label class="form-label" id="boil-time-label">Boil Time (min)</label>
               <input type="number" name="boil_time_min" class="form-control" value="60">
             </div>
             <div class="col-md-4">
-              <label class="form-label">Mash Efficiency (%)</label>
+              <label class="form-label" id="efficiency-label">Mash Efficiency (%)</label>
               <input type="number" name="efficiency" class="form-control" step="0.5" value="75">
             </div>
             <div class="col-md-4">
-              <label class="form-label">Trub/Chiller Loss (L)</label>
+              <label class="form-label" id="trub-label">Trub / Lees Loss (L)</label>
               <input type="number" name="trub_chiller_loss_l" class="form-control" step="0.1" value="1.0">
             </div>
             <div class="col-12">
               <label class="form-label">Notes</label>
-              <textarea name="notes" class="form-control" rows="2" placeholder="Description of your setup…"></textarea>
+              <textarea name="notes" class="form-control" rows="2"
+                        placeholder="Description of your setup…"></textarea>
             </div>
           </div>
         </div>
@@ -103,4 +140,35 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const EQUIP_LABELS = {
+  beer:    { batch: 'Batch Size (L)', boil: 'Pre-boil Volume (L)', time: 'Boil Time (min)', eff: 'Mash Efficiency (%)', trub: 'Trub / Chiller Loss (L)' },
+  wine:    { batch: 'Target Yield (L)', boil: 'Must / Crush Volume (L)', time: 'Press / Run Time (min)', eff: 'Juice Yield (%)', trub: 'Lees Loss (L)' },
+  spirits: { batch: 'Still Charge (L)', boil: 'Low Wines Volume (L)', time: 'Run Time (min)', eff: 'Spirit Yield (%)', trub: 'Feints / Loss (L)' },
+};
+
+function updateEquipFields(craft) {
+  const labels = EQUIP_LABELS[craft] || EQUIP_LABELS.beer;
+  document.getElementById('batch-size-label').firstChild.textContent = labels.batch + ' ';
+  document.getElementById('boil-size-label').textContent = labels.boil;
+  document.getElementById('boil-time-label').textContent = labels.time;
+  document.getElementById('efficiency-label').textContent = labels.eff;
+  document.getElementById('trub-label').textContent = labels.trub;
+  document.getElementById('still-type-field').style.display = craft === 'spirits' ? '' : 'none';
+}
+</script>
+{% endblock %}
+
+{% block page_help %}
+<h6>Craft Profiles</h6>
+<p>Equipment profiles are tagged to a craft (Beer / Wine / Spirits). Only matching profiles appear in the recipe form dropdown for that craft.</p>
+<h6>Beer</h6>
+<p>Pre-boil volume, boil time, and mash efficiency drive the OG and color calculations in the recipe form.</p>
+<h6>Wine</h6>
+<p>Track target yield from crush, must volume, and expected lees loss. Efficiency is juice yield % from grapes.</p>
+<h6>Spirits</h6>
+<p>Still charge volume, expected spirit yield %, and still type. Choose Pot Still for traditional flavor-forward spirits; Column/Reflux for higher ABV neutral spirits; Hybrid for flexibility.</p>
 {% endblock %}

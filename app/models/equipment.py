@@ -7,6 +7,8 @@ class Equipment(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(String(100), nullable=False, unique=True)
+    craft = Column(String(20), default="beer")    # beer, wine, spirits
+    still_type = Column(String(50))               # Pot Still, Column Still, Hybrid, Alembic (spirits only)
 
     batch_size_l = Column(Float, nullable=False)      # target post-boil volume
     boil_size_l = Column(Float, nullable=False)       # pre-boil volume

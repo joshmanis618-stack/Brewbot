@@ -22,6 +22,7 @@ from app.models.yeast import Yeast
 from app.models.user import User
 from app.models.barrel import Barrel, BarrelAgingRecord, BarrelAgingEntry
 from app.models.grape_variety import GrapeVariety, RecipeGrape
+from app.models.mash_step import MashStep
 import json
 from app.services import backup as backup_service
 from app.services import beerxml as beerxml_service
@@ -270,12 +271,34 @@ def _parse_grapes(form):
     return grapes
 
 
-def _apply_wine_fields(recipe, form):
+def _parse_mash_steps(form):
+    steps = []
+    i = 0
+    while form.get(f"mash_name_{i}") is not None or form.get(f"mash_temp_c_{i}"):
+        temp_raw = form.get(f"mash_temp_c_{i}", "")
+        time_raw = form.get(f"mash_time_min_{i}", "")
+        if not temp_raw or not time_raw:
+            i += 1
+            continue
+        steps.append({
+            "step_number": i + 1,
+            "name": form.get(f"mash_name_{i}") or None,
+            "temp_c": float(temp_raw),
+            "time_min": int(time_raw),
+            "additions": form.get(f"mash_additions_{i}") or None,
+            "notes": form.get(f"mash_notes_{i}") or None,
+        })
+        i += 1
+    return steps
+
+
+def _apply_craft_fields(recipe, form):
     recipe.craft = form.get("craft", "beer")
     recipe.wine_style = form.get("wine_style") or None
     recipe.skin_contact_days = int(form["skin_contact_days"]) if form.get("skin_contact_days") else None
     recipe.target_ta = float(form["target_ta"]) if form.get("target_ta") else None
     recipe.target_ph = float(form["target_ph"]) if form.get("target_ph") else None
+    recipe.spirits_style = form.get("spirits_style") or None
 
 
 @router.post("/recipes", response_class=HTMLResponse)
@@ -283,6 +306,7 @@ async def recipe_create(request: Request, db: Session = Depends(get_db)):
     form = await request.form()
     fermentables, hops, yeasts, miscs = _parse_ingredients(form)
     grapes = _parse_grapes(form)
+    mash_steps = _parse_mash_steps(form)
     recipe = Recipe(
         name=form["name"],
         type=form.get("type", "All Grain"),
@@ -295,7 +319,7 @@ async def recipe_create(request: Request, db: Session = Depends(get_db)):
         notes=form.get("notes") or None,
         brewer=form.get("brewer") or None,
     )
-    _apply_wine_fields(recipe, form)
+    _apply_craft_fields(recipe, form)
     db.add(recipe)
     db.flush()
     for f in fermentables:
@@ -308,6 +332,8 @@ async def recipe_create(request: Request, db: Session = Depends(get_db)):
         db.add(RecipeMisc(recipe_id=recipe.id, **m))
     for g in grapes:
         db.add(RecipeGrape(recipe_id=recipe.id, **g))
+    for s in mash_steps:
+        db.add(MashStep(recipe_id=recipe.id, **s))
     db.flush()
     db.refresh(recipe)
     calc_service.calculate(recipe)
@@ -334,8 +360,10 @@ async def recipe_update(recipe_id: int, request: Request, db: Session = Depends(
 
     fermentables, hops, yeasts, miscs = _parse_ingredients(form)
     grapes = _parse_grapes(form)
-    _apply_wine_fields(recipe, form)
-    for obj in recipe.fermentables[:] + recipe.hops[:] + recipe.yeasts[:] + recipe.miscs[:] + recipe.grapes[:]:
+    mash_steps = _parse_mash_steps(form)
+    _apply_craft_fields(recipe, form)
+    for obj in (recipe.fermentables[:] + recipe.hops[:] + recipe.yeasts[:] +
+                recipe.miscs[:] + recipe.grapes[:] + recipe.mash_steps[:]):
         db.delete(obj)
     db.flush()
     for f in fermentables:
@@ -348,6 +376,8 @@ async def recipe_update(recipe_id: int, request: Request, db: Session = Depends(
         db.add(RecipeMisc(recipe_id=recipe.id, **m))
     for g in grapes:
         db.add(RecipeGrape(recipe_id=recipe.id, **g))
+    for s in mash_steps:
+        db.add(MashStep(recipe_id=recipe.id, **s))
     db.flush()
     db.refresh(recipe)
     calc_service.calculate(recipe)
@@ -468,8 +498,10 @@ async def equipment_create(request: Request, db: Session = Depends(get_db)):
     form = await request.form()
     db.add(Equipment(
         name=form["name"],
+        craft=form.get("craft", "beer"),
+        still_type=form.get("still_type") or None,
         batch_size_l=float(form["batch_size_l"]),
-        boil_size_l=float(form["boil_size_l"]),
+        boil_size_l=float(form.get("boil_size_l") or 0),
         boil_time_min=int(form.get("boil_time_min", 60)),
         efficiency=float(form.get("efficiency", 75.0)),
         trub_chiller_loss_l=float(form.get("trub_chiller_loss_l", 1.0)),
@@ -1140,6 +1172,11 @@ def htmx_grape_row(index: int, request: Request, db: Session = Depends(get_db)):
         "index": index,
         "grapes": db.query(GrapeVariety).order_by(GrapeVariety.name).all(),
     })
+
+
+@router.get("/htmx/row/mash_step", response_class=HTMLResponse)
+def htmx_mash_step_row(index: int, request: Request):
+    return templates.TemplateResponse(request, "partials/mash_step_row.html", {"index": index})
 
 
 # ── Unit / measurement converter ──────────────────────────────────────────────

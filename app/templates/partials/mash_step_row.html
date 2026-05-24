@@ -1,0 +1,28 @@
+<tr data-row-type="mash_step">
+  <td class="text-muted small align-middle" style="width:32px;">{{ index + 1 }}</td>
+  <td>
+    <input name="mash_name_{{ index }}" type="text"
+           class="form-control form-control-sm" placeholder="e.g. Cereal Cook">
+  </td>
+  <td>
+    <input name="mash_temp_c_{{ index }}" type="number" step="0.5" min="30" max="105"
+           class="form-control form-control-sm" placeholder="65" required>
+  </td>
+  <td>
+    <input name="mash_time_min_{{ index }}" type="number" min="1" max="300"
+           class="form-control form-control-sm" placeholder="60" required>
+  </td>
+  <td>
+    <input name="mash_additions_{{ index }}" type="text"
+           class="form-control form-control-sm" placeholder="α-amylase, corn…">
+  </td>
+  <td>
+    <input name="mash_notes_{{ index }}" type="text"
+           class="form-control form-control-sm" placeholder="Optional notes">
+  </td>
+  <td>
+    <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)">
+      <i class="bi bi-x"></i>
+    </button>
+  </td>
+</tr>
