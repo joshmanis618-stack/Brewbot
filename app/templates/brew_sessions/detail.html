@@ -95,7 +95,10 @@
   </div>
   <div class="collapse" id="editSessionBody">
     <div class="card-body">
-      <form method="post" action="/brew-sessions/{{ session.id }}/update">
+      <form id="edit-session-form" method="post" action="/brew-sessions/{{ session.id }}/update"
+            data-recipe-og="{{ session.recipe.og or '' }}"
+            data-recipe-batch="{{ session.recipe.batch_size_l or '' }}"
+            data-recipe-eff="{{ session.recipe.efficiency or '' }}">
         <div class="row g-3 mb-3">
           <div class="col-md-3">
             <label class="form-label">Status</label>
@@ -124,33 +127,48 @@
         <div class="row g-3 mb-3">
           <div class="col-md-2">
             <label class="form-label">Actual OG</label>
-            <input type="number" name="actual_og" class="form-control"
-                   step="0.001" min="0.990" max="1.200"
+            <input type="number" name="actual_og" id="sess_og" class="form-control"
+                   step="0.001" min="0.990" max="1.200" oninput="sessionCalc()"
                    value="{{ '%.3f'|format(session.actual_og) if session.actual_og else '' }}" placeholder="1.050">
           </div>
           <div class="col-md-2">
-            <label class="form-label">Actual FG</label>
-            <input type="number" name="actual_fg" class="form-control"
-                   step="0.001" min="0.990" max="1.200"
+            <label class="form-label d-flex justify-content-between align-items-center">
+              Actual FG
+              <span id="sess_atten_badge" class="badge bg-secondary fw-normal" style="display:none!important;"></span>
+            </label>
+            <input type="number" name="actual_fg" id="sess_fg" class="form-control"
+                   step="0.001" min="0.990" max="1.200" oninput="sessionCalc()"
                    value="{{ '%.3f'|format(session.actual_fg) if session.actual_fg else '' }}" placeholder="1.010">
           </div>
           <div class="col-md-2">
-            <label class="form-label">Actual ABV (%)</label>
-            <input type="number" name="actual_abv" class="form-control"
+            <label class="form-label d-flex justify-content-between align-items-center">
+              Actual ABV (%)
+              <span class="badge bg-body-tertiary text-muted border fw-normal small" style="font-size:.65rem;">auto</span>
+            </label>
+            <input type="number" name="actual_abv" id="sess_abv" class="form-control"
                    step="0.1" min="0" max="30"
                    value="{{ '%.1f'|format(session.actual_abv) if session.actual_abv else '' }}" placeholder="5.2">
           </div>
           <div class="col-md-2">
             <label class="form-label">Batch Size (L)</label>
-            <input type="number" name="actual_batch_size_l" class="form-control"
-                   step="0.1" min="0"
+            <input type="number" name="actual_batch_size_l" id="sess_batch" class="form-control"
+                   step="0.1" min="0" oninput="sessionCalc()"
                    value="{{ session.actual_batch_size_l or '' }}" placeholder="19.0">
           </div>
           <div class="col-md-2">
-            <label class="form-label">Efficiency (%)</label>
-            <input type="number" name="actual_efficiency" class="form-control"
+            <label class="form-label d-flex justify-content-between align-items-center">
+              Efficiency (%)
+              <span class="badge bg-body-tertiary text-muted border fw-normal small" style="font-size:.65rem;">auto</span>
+            </label>
+            <input type="number" name="actual_efficiency" id="sess_eff" class="form-control"
                    step="0.1" min="0" max="100"
                    value="{{ '%.1f'|format(session.actual_efficiency) if session.actual_efficiency else '' }}" placeholder="72.0">
+          </div>
+          <div class="col-md-2 d-flex align-items-end">
+            <div id="sess_atten_display" class="w-100 text-center border rounded py-1" style="display:none!important;">
+              <div class="small text-muted">Attenuation</div>
+              <div id="sess_atten_val" class="fw-semibold">—</div>
+            </div>
           </div>
         </div>
         {% set is_wine = session.craft == 'wine' or (session.recipe and session.recipe.craft == 'wine') %}
@@ -896,6 +914,44 @@
 
 {% block scripts %}
 <script>
+// ── Edit session live calculations ────────────────────────────────────────────
+function sessionCalc() {
+  const og    = parseFloat(document.getElementById('sess_og').value);
+  const fg    = parseFloat(document.getElementById('sess_fg').value);
+  const batch = parseFloat(document.getElementById('sess_batch').value);
+
+  // ABV from OG + FG
+  if (og > 1 && fg > 0 && fg < og) {
+    document.getElementById('sess_abv').value = ((og - fg) * 131.25).toFixed(1);
+  }
+
+  // Apparent attenuation badge
+  const attenDisplay = document.getElementById('sess_atten_display');
+  const attenVal     = document.getElementById('sess_atten_val');
+  if (og > 1 && fg > 0 && fg < og) {
+    const atten = ((og - fg) / (og - 1)) * 100;
+    attenVal.textContent = atten.toFixed(1) + '%';
+    attenDisplay.style.removeProperty('display');
+  } else {
+    attenDisplay.style.setProperty('display', 'none', 'important');
+  }
+
+  // Efficiency from actual OG + actual batch vs recipe targets
+  const form       = document.getElementById('edit-session-form');
+  const recipeOG   = parseFloat(form.dataset.recipeOg);
+  const recipeBatch= parseFloat(form.dataset.recipeBatch);
+  const recipeEff  = parseFloat(form.dataset.recipeEff);
+  if (og > 1 && batch > 0 && recipeOG > 1 && recipeBatch > 0 && recipeEff > 0) {
+    // Back out theoretical gravity points at 100% eff from recipe
+    const theoPts  = (recipeOG - 1) * 1000 * recipeBatch / (recipeEff / 100);
+    const actualEff= ((og - 1) * 1000 * batch / theoPts) * 100;
+    document.getElementById('sess_eff').value = Math.min(actualEff, 100).toFixed(1);
+  }
+}
+
+// Run once on load so any pre-filled values get their derived fields populated
+sessionCalc();
+
 function agingBarrelChanged() {
   const sel = document.getElementById('aging-barrel-select');
   const opt = sel.options[sel.selectedIndex];
