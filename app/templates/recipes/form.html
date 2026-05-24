@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ 'Edit ' + recipe.name if recipe else 'New Recipe' }} — Brewbot{% endblock %}
 
+{% set ic = (recipe.craft if recipe else request.session.get('craft', 'beer')) or 'beer' %}
 {% block content %}
 <div class="page-header">
   <div>
@@ -39,13 +40,23 @@
             </div>
 
             <!-- Type: beer = All Grain / Extract / Partial Mash; spirits = Grain / Fruit / Molasses / Agave; hidden for wine -->
-            <div class="col-md-3" id="type-field">
+            <div class="col-md-3" id="type-field"{{ ' style="display:none;"' if ic == 'wine' else '' }}>
               <label class="form-label" id="type-label">Type</label>
-              <select name="type" id="type-select" class="form-select"></select>
+              <select name="type" id="type-select" class="form-select">
+                {% if ic == 'spirits' %}
+                  {% for val, lbl in [('All Grain','Grain Mash'),('Fruit','Fruit Wash'),('Molasses','Molasses / Sugar Base'),('Agave','Agave Base')] %}
+                  <option value="{{ val }}" {{ 'selected' if recipe and recipe.type == val }}>{{ lbl }}</option>
+                  {% endfor %}
+                {% else %}
+                  {% for t in ['All Grain','Extract','Partial Mash'] %}
+                  <option value="{{ t }}" {{ 'selected' if recipe and recipe.type == t }}>{{ t }}</option>
+                  {% endfor %}
+                {% endif %}
+              </select>
             </div>
 
             <!-- Style: beer uses DB-driven select; wine/spirits use JS-built grouped selects -->
-            <div class="col-md-6" id="style-field-beer">
+            <div class="col-md-6" id="style-field-beer"{{ ' style="display:none;"' if ic != 'beer' else '' }}>
               <label class="form-label">Style</label>
               <select name="style_id" class="form-select" onchange="updateStyleTargets()">
                 <option value="">— None —</option>
@@ -62,13 +73,13 @@
                 {% endfor %}
               </select>
             </div>
-            <div class="col-md-6" id="style-field-wine" style="display:none;">
+            <div class="col-md-6" id="style-field-wine"{{ ' style="display:none;"' if ic != 'wine' else '' }}>
               <label class="form-label">Wine Style</label>
               <select name="wine_style" id="wine-style-select" class="form-select">
                 <option value="">— None —</option>
               </select>
             </div>
-            <div class="col-md-6" id="style-field-spirits" style="display:none;">
+            <div class="col-md-6" id="style-field-spirits"{{ ' style="display:none;"' if ic != 'spirits' else '' }}>
               <label class="form-label">Spirits Style</label>
               <select name="spirits_style" id="spirits-style-select" class="form-select">
                 <option value="">— None —</option>
@@ -132,7 +143,7 @@
       </div>
 
       <!-- Wine Details (wine craft only) -->
-      <div class="card mb-4" id="wine-details-card" data-craft="wine" style="display:none;">
+      <div class="card mb-4" id="wine-details-card" data-craft="wine"{{ ' style="display:none;"' if ic != 'wine' else '' }}>
         <div class="card-header fw-semibold"><i class="bi bi-tree me-2"></i>Wine Details</div>
         <div class="card-body">
           <div class="row g-3">
@@ -165,7 +176,7 @@
       </div>
 
       <!-- Grapes (wine craft only) -->
-      <div class="card mb-4" id="grapes-card" data-craft="wine" style="display:none;">
+      <div class="card mb-4" id="grapes-card" data-craft="wine"{{ ' style="display:none;"' if ic != 'wine' else '' }}>
         <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
           <span><i class="bi bi-tree me-2"></i>Grapes</span>
           <button type="button" class="btn btn-brew btn-sm" onclick="addIngredientRow('grape')">
@@ -212,7 +223,7 @@
       </div>
 
       <!-- Mash Schedule (beer / spirits) -->
-      <div class="card mb-4" data-craft="beer,spirits">
+      <div class="card mb-4" data-craft="beer,spirits"{{ ' style="display:none;"' if ic == 'wine' else '' }}>
         <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
           <span><i class="bi bi-thermometer-half me-2"></i>Mash Schedule</span>
           <button type="button" class="btn btn-brew btn-sm" onclick="addIngredientRow('mash_step')">
@@ -261,7 +272,7 @@
       </div>
 
       <!-- Fermentables (beer / spirits) -->
-      <div class="card mb-4" data-craft="beer,spirits">
+      <div class="card mb-4" data-craft="beer,spirits"{{ ' style="display:none;"' if ic == 'wine' else '' }}>
         <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
           <span><i class="bi bi-bag me-2"></i>Fermentables</span>
           <button type="button" class="btn btn-brew btn-sm" onclick="addIngredientRow('fermentable')">
@@ -314,7 +325,7 @@
       </div>
 
       <!-- Hops (beer only) -->
-      <div class="card mb-4" data-craft="beer">
+      <div class="card mb-4" data-craft="beer"{{ ' style="display:none;"' if ic != 'beer' else '' }}>
         <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
           <span><i class="bi bi-flower1 me-2"></i>Hops</span>
           <button type="button" class="btn btn-brew btn-sm" onclick="addIngredientRow('hop')">
