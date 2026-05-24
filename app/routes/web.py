@@ -548,6 +548,9 @@ async def equipment_create(request: Request, db: Session = Depends(get_db)):
 def equipment_delete(equip_id: int, db: Session = Depends(get_db)):
     item = db.get(Equipment, equip_id)
     if item:
+        # NULL out FK references so the delete doesn't violate constraints
+        db.query(Recipe).filter(Recipe.equipment_id == equip_id).update({"equipment_id": None})
+        db.query(BrewSession).filter(BrewSession.equipment_id == equip_id).update({"equipment_id": None})
         db.delete(item)
         db.commit()
     return RedirectResponse("/equipment", status_code=303)
