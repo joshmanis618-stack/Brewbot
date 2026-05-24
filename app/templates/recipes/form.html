@@ -55,33 +55,10 @@
               </select>
             </div>
 
-            <!-- Style: beer uses DB-driven select; wine/spirits use JS-built grouped selects -->
-            <div class="col-md-6" id="style-field-beer"{{ ' style="display:none;"' if ic != 'beer' else '' }}>
-              <label class="form-label">Style</label>
-              <select name="style_id" class="form-select" onchange="updateStyleTargets()">
-                <option value="">— None —</option>
-                {% for s in styles %}
-                <option value="{{ s.id }}"
-                        data-og-min="{{ s.og_min or '' }}" data-og-max="{{ s.og_max or '' }}"
-                        data-fg-min="{{ s.fg_min or '' }}" data-fg-max="{{ s.fg_max or '' }}"
-                        data-abv-min="{{ s.abv_min or '' }}" data-abv-max="{{ s.abv_max or '' }}"
-                        data-ibu-min="{{ s.ibu_min or '' }}" data-ibu-max="{{ s.ibu_max or '' }}"
-                        data-srm-min="{{ s.color_min or '' }}" data-srm-max="{{ s.color_max or '' }}"
-                        {{ 'selected' if recipe and recipe.style_id == s.id }}>
-                  {{ s.name }}{% if s.style_guide %} ({{ s.style_guide }}){% endif %}
-                </option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="col-md-6" id="style-field-wine"{{ ' style="display:none;"' if ic != 'wine' else '' }}>
-              <label class="form-label">Wine Style</label>
-              <select name="wine_style" id="wine-style-select" class="form-select">
-                <option value="">— None —</option>
-              </select>
-            </div>
-            <div class="col-md-6" id="style-field-spirits"{{ ' style="display:none;"' if ic != 'spirits' else '' }}>
-              <label class="form-label">Spirits Style</label>
-              <select name="spirits_style" id="spirits-style-select" class="form-select">
+            <!-- Style: single dropdown — name + options swap per craft -->
+            <div class="col-md-6">
+              <label class="form-label" id="style-label">Style</label>
+              <select id="style-select" class="form-select" onchange="updateStyleTargets()">
                 <option value="">— None —</option>
               </select>
             </div>
@@ -576,142 +553,192 @@
 
 {% block scripts %}
 <script>
-// ── Wine styles: [value, 'American Varietal / European Regional'] ─────────────
+// ── Style data ────────────────────────────────────────────────────────────────
+
+// Beer styles from DB (for gauge data attributes)
+const BEER_STYLES = [
+  {% for s in styles %}
+  { id: {{ s.id }}, name: {{ s.name|tojson }}{% if s.style_guide %}, guide: {{ s.style_guide|tojson }}{% endif %},
+    ogMin: {{ s.og_min or 'null' }}, ogMax: {{ s.og_max or 'null' }},
+    fgMin: {{ s.fg_min or 'null' }}, fgMax: {{ s.fg_max or 'null' }},
+    abvMin: {{ s.abv_min or 'null' }}, abvMax: {{ s.abv_max or 'null' }},
+    ibuMin: {{ s.ibu_min or 'null' }}, ibuMax: {{ s.ibu_max or 'null' }},
+    srmMin: {{ s.color_min or 'null' }}, srmMax: {{ s.color_max or 'null' }} },
+  {% endfor %}
+];
+
+// Wine styles: grouped [group, [[value, label], …]]
 const WINE_STYLES = [
-  ['Red', [
-    ['Cabernet Sauvignon', 'Cabernet Sauvignon / Bordeaux Rouge, Médoc'],
-    ['Merlot',             'Merlot / Saint-Émilion, Pomerol'],
-    ['Pinot Noir',         'Pinot Noir / Burgundy Rouge, Côte de Nuits'],
-    ['Syrah / Shiraz',     'Syrah / Northern Rhône (Hermitage), Shiraz'],
+  ['Red Wines', [
+    ['Cabernet Sauvignon', 'Cabernet Sauvignon'],
+    ['Merlot',             'Merlot'],
+    ['Pinot Noir',         'Pinot Noir'],
+    ['Syrah / Shiraz',     'Syrah / Shiraz'],
     ['Zinfandel',          'Zinfandel / Primitivo'],
-    ['Cabernet Franc',     'Cabernet Franc / Chinon, Bourgueil'],
-    ['Nebbiolo',           'Nebbiolo / Barolo, Barbaresco'],
-    ['Sangiovese',         'Sangiovese / Chianti, Brunello di Montalcino'],
-    ['Tempranillo',        'Tempranillo / Rioja, Ribera del Duero'],
-    ['Grenache',           'Grenache / Châteauneuf-du-Pape, Priorat'],
-    ['Malbec',             'Malbec / Cahors, Mendoza'],
-    ['Mourvèdre',          'Mourvèdre / Bandol, Monastrell'],
+    ['Cabernet Franc',     'Cabernet Franc'],
+    ['Malbec',             'Malbec'],
+    ['Nebbiolo',           'Nebbiolo (Barolo / Barbaresco)'],
+    ['Sangiovese',         'Sangiovese (Chianti / Brunello)'],
+    ['Tempranillo',        'Tempranillo (Rioja)'],
+    ['Grenache',           'Grenache / Garnacha'],
+    ['Mourvèdre',          'Mourvèdre / Monastrell'],
+    ['Barbera',            'Barbera'],
+    ['Petit Verdot',       'Petit Verdot'],
+    ['Petite Sirah',       'Petite Sirah / Durif'],
+    ['Meritage / Bordeaux Blend', 'Meritage / Bordeaux Blend'],
   ]],
-  ['White', [
-    ['Chardonnay',         'Chardonnay / White Burgundy, Chablis, Meursault'],
-    ['Sauvignon Blanc',    'Sauvignon Blanc / Sancerre, Pouilly-Fumé'],
-    ['Riesling',           'Riesling / Mosel, Alsace, Rheingau'],
-    ['Pinot Gris',         'Pinot Gris / Alsace Pinot Gris, Pinot Grigio'],
-    ['Gewürztraminer',     'Gewürztraminer / Alsace Gewürztraminer'],
-    ['Viognier',           'Viognier / Condrieu'],
-    ['Chenin Blanc',       'Chenin Blanc / Vouvray, Savennières'],
-    ['Grüner Veltliner',   'Grüner Veltliner / Wachau, Kamptal'],
-    ['Albariño',           'Albariño / Rías Baixas, Vinho Verde'],
-    ['Vermentino',         'Vermentino / Sardinia, Provence Blanc'],
-    ['Muscat Blanc',       'Muscat Blanc / Muscat d\'Alsace, Moscato d\'Asti'],
+  ['White Wines', [
+    ['Chardonnay',         'Chardonnay'],
+    ['Sauvignon Blanc',    'Sauvignon Blanc'],
+    ['Riesling',           'Riesling'],
+    ['Pinot Gris',         'Pinot Gris / Pinot Grigio'],
+    ['Gewürztraminer',     'Gewürztraminer'],
+    ['Viognier',           'Viognier'],
+    ['Chenin Blanc',       'Chenin Blanc'],
+    ['Muscat',             'Muscat / Moscato'],
+    ['Pinot Blanc',        'Pinot Blanc'],
+    ['Grüner Veltliner',   'Grüner Veltliner'],
+    ['Albariño',           'Albariño / Alvarinho'],
+    ['Vermentino',         'Vermentino'],
+    ['Roussanne',          'Roussanne / Marsanne'],
+    ['White Bordeaux Blend', 'White Bordeaux Blend'],
   ]],
   ['Rosé', [
-    ['Provence Rosé',      'Provence Rosé (Grenache / Mourvèdre / Cinsault)'],
-    ['Tavel Rosé',         'Tavel (Grenache-dominant Rhône Rosé)'],
-    ['Pinot Noir Rosé',    'Pinot Noir Rosé / Vin Gris de Pinot'],
-    ['White Zinfandel',    'White Zinfandel / Blush'],
+    ['Provence Rosé',      'Provence Rosé (Dry)'],
+    ['White Zinfandel',    'White Zinfandel (Sweet Blush)'],
+    ['Pinot Noir Rosé',    'Pinot Noir Rosé'],
+    ['Grenache Rosé',      'Grenache Rosé'],
+    ['Tavel',              'Tavel (Rhône Rosé)'],
   ]],
   ['Sparkling', [
-    ['Traditional Method', 'Champagne Method / Crémant, Cava, Franciacorta'],
-    ['Charmat Method',     'Charmat / Prosecco, Lambrusco'],
-    ['Pétillant Naturel',  'Pétillant Naturel / Méthode Ancestrale'],
-    ['Force Carbonated',   'Force Carbonated Sparkling'],
+    ['Champagne / Traditional Method', 'Champagne / Traditional Method'],
+    ['Prosecco / Charmat', 'Prosecco / Charmat Method'],
+    ['Cava',               'Cava (Spanish Traditional Method)'],
+    ['Pétillant Naturel',  'Pétillant Naturel (Pét-Nat)'],
+    ['Sparkling Rosé',     'Sparkling Rosé'],
   ]],
   ['Orange & Skin-Contact', [
     ['Orange Wine',        'Orange Wine (Skin-Contact White)'],
-    ['Amber Wine',         'Amber Wine (Extended Maceration White, Georgian Kvevri)'],
+    ['Amber Wine',         'Amber Wine (Extended Maceration)'],
   ]],
   ['Dessert & Fortified', [
-    ['Late Harvest',       'Late Harvest / Spätlese, Auslese, Vendanges Tardives'],
-    ['Icewine / Eiswein',  'Icewine / Eiswein'],
-    ['Sauternes Style',    'Botrytis / Sauternes, Beerenauslese, Tokaji'],
-    ['Port Style',         'Port Style / Ruby, Tawny, Vintage'],
-    ['Sherry Style',       'Sherry Style / Fino, Amontillado, Oloroso'],
-    ['Madeira Style',      'Madeira Style / Sercial, Bual, Malmsey'],
+    ['Late Harvest',       'Late Harvest'],
+    ['Ice Wine',           'Ice Wine / Eiswein'],
+    ['Sauternes / Botrytis', 'Sauternes / Botrytis Affected'],
+    ['Port',               'Port (Ruby / Tawny / Vintage)'],
+    ['Sherry',             'Sherry (Fino / Amontillado / Oloroso)'],
+    ['Madeira',            'Madeira'],
+    ['Moscato d\'Asti',    'Moscato d\'Asti (Sweet Sparkling)'],
   ]],
 ];
 
-// ── Spirits styles: [group, [[value, label], …]] ──────────────────────────────
+// Spirits styles: grouped [group, [[value, label], …]]
 const SPIRITS_STYLES = [
   ['Whiskey', [
-    ['Bourbon',            'Bourbon (American Corn Whiskey)'],
+    ['Bourbon',            'Bourbon'],
     ['Tennessee Whiskey',  'Tennessee Whiskey'],
-    ['Rye Whiskey',        'Rye Whiskey (American)'],
-    ['Single Malt Scotch', 'Single Malt Scotch (Highland, Islay, Speyside…)'],
+    ['Rye Whiskey',        'Rye Whiskey'],
+    ['Wheat Whiskey',      'Wheat Whiskey'],
+    ['Single Malt Scotch', 'Single Malt Scotch'],
     ['Blended Scotch',     'Blended Scotch'],
     ['Irish Whiskey',      'Irish Whiskey'],
     ['Japanese Whisky',    'Japanese Whisky'],
     ['Canadian Whisky',    'Canadian Whisky'],
-    ['Corn Whiskey',       'Moonshine / White Corn Whiskey'],
+    ['White Whiskey',      'White Whiskey / Moonshine'],
   ]],
   ['Brandy', [
-    ['Cognac',             'Cognac (French Grape Brandy)'],
+    ['Cognac',             'Cognac'],
     ['Armagnac',           'Armagnac'],
     ['American Brandy',    'American Brandy'],
     ['Calvados',           'Calvados (Apple Brandy)'],
-    ['Applejack',          'Applejack / Freeze-Distilled Cider'],
-    ['Grappa',             'Grappa / Marc (Pomace Brandy)'],
-    ['Pisco',              'Pisco (South American Grape Brandy)'],
+    ['Applejack',          'Applejack'],
+    ['Pisco',              'Pisco'],
+    ['Grappa',             'Grappa / Marc'],
     ['Fruit Brandy',       'Fruit Brandy / Eau-de-Vie'],
   ]],
   ['Rum', [
-    ['White Rum',          'Light / White Rum'],
+    ['White Rum',          'White / Light Rum'],
     ['Gold Rum',           'Gold / Amber Rum'],
     ['Dark Rum',           'Dark Rum'],
     ['Spiced Rum',         'Spiced Rum'],
-    ['Agricole Rhum',      'Rhum Agricole (Fresh Cane Juice)'],
-    ['Demerara Rum',       'Demerara Rum (Guyana)'],
-    ['Cachaca',            'Cachaça (Brazilian Sugarcane Spirit)'],
+    ['Rhum Agricole',      'Rhum Agricole'],
+    ['Demerara Rum',       'Demerara Rum'],
+    ['Cachaça',            'Cachaça'],
   ]],
   ['Vodka', [
     ['Grain Vodka',        'Grain Vodka (Wheat / Rye / Corn)'],
     ['Potato Vodka',       'Potato Vodka'],
-    ['Rye Vodka',          'Rye Vodka'],
     ['Flavored Vodka',     'Flavored Vodka'],
   ]],
   ['Gin', [
     ['London Dry Gin',     'London Dry Gin'],
     ['American Gin',       'American / New Western Gin'],
-    ['Old Tom Gin',        'Old Tom Gin (Slightly Sweet)'],
-    ['Genever',            'Genever / Jenever (Dutch Gin)'],
-    ['Sloe Gin',           'Sloe Gin (Fruit Liqueur)'],
+    ['Old Tom Gin',        'Old Tom Gin'],
+    ['Genever',            'Genever (Dutch Gin)'],
     ['Navy Strength Gin',  'Navy Strength Gin (57%+ ABV)'],
+    ['Sloe Gin',           'Sloe Gin'],
   ]],
   ['Agave', [
-    ['Blanco Tequila',     'Blanco Tequila (Unaged)'],
-    ['Reposado Tequila',   'Reposado Tequila (2–12 months oak)'],
-    ['Añejo Tequila',      'Añejo Tequila (1–3 years oak)'],
-    ['Mezcal',             'Mezcal (Roasted Agave)'],
-    ['Sotol',              'Sotol (Desert Spoon)'],
-    ['Raicilla',           'Raicilla (Jalisco Mezcal variant)'],
+    ['Blanco Tequila',     'Blanco Tequila'],
+    ['Reposado Tequila',   'Reposado Tequila'],
+    ['Añejo Tequila',      'Añejo Tequila'],
+    ['Extra Añejo Tequila','Extra Añejo Tequila'],
+    ['Mezcal',             'Mezcal'],
+    ['Sotol',              'Sotol'],
   ]],
-  ['Liqueur & Other', [
-    ['Absinthe',           'Absinthe (Wormwood / Anise)'],
-    ['Aquavit',            'Aquavit (Caraway / Dill)'],
-    ['Triple Sec',         'Triple Sec / Curaçao (Orange Liqueur)'],
-    ['Coffee Liqueur',     'Coffee Liqueur'],
+  ['Other Spirits', [
+    ['Absinthe',           'Absinthe'],
+    ['Aquavit',            'Aquavit'],
+    ['Baijiu',             'Baijiu'],
+    ['Soju / Shochu',      'Soju / Shochu'],
+    ['Amaro',              'Amaro (Italian Bitter)'],
     ['Herbal Liqueur',     'Herbal / Botanical Liqueur'],
-    ['Amaro',              'Amaro (Italian Bitter Liqueur)'],
-    ['Cream Liqueur',      'Cream Liqueur'],
-    ['Soju',               'Soju / Shochu'],
-    ['Baijiu',             'Baijiu (Chinese Grain Spirit)'],
   ]],
 ];
 
-function _buildGroupedSelect(selectEl, groups, savedValue) {
-  while (selectEl.options.length > 1) selectEl.remove(1);
-  groups.forEach(([groupLabel, opts]) => {
-    const og = document.createElement('optgroup');
-    og.label = groupLabel;
-    opts.forEach(([val, label]) => {
+// Saved values (for edit mode)
+const SAVED_STYLE_ID      = {{ recipe.style_id or 'null' }};
+const SAVED_WINE_STYLE    = {{ (recipe.wine_style)|tojson if recipe and recipe.wine_style else 'null' }};
+const SAVED_SPIRITS_STYLE = {{ (recipe.spirits_style)|tojson if recipe and recipe.spirits_style else 'null' }};
+
+function _populateStyleSelect(craft) {
+  const sel = document.getElementById('style-select');
+  sel.innerHTML = '<option value="">— None —</option>';
+
+  if (craft === 'beer') {
+    sel.name = 'style_id';
+    document.getElementById('style-label').textContent = 'Beer Style';
+    BEER_STYLES.forEach(s => {
       const o = document.createElement('option');
-      o.value = val;
-      o.textContent = label;
-      if (val === savedValue) o.selected = true;
-      og.appendChild(o);
+      o.value = s.id;
+      o.textContent = s.name + (s.guide ? ` (${s.guide})` : '');
+      o.dataset.ogMin = s.ogMin; o.dataset.ogMax = s.ogMax;
+      o.dataset.fgMin = s.fgMin; o.dataset.fgMax = s.fgMax;
+      o.dataset.abvMin = s.abvMin; o.dataset.abvMax = s.abvMax;
+      o.dataset.ibuMin = s.ibuMin; o.dataset.ibuMax = s.ibuMax;
+      o.dataset.srmMin = s.srmMin; o.dataset.srmMax = s.srmMax;
+      if (SAVED_STYLE_ID && s.id == SAVED_STYLE_ID) o.selected = true;
+      sel.appendChild(o);
     });
-    selectEl.appendChild(og);
-  });
+
+  } else {
+    const groups = craft === 'wine' ? WINE_STYLES : SPIRITS_STYLES;
+    const saved  = craft === 'wine' ? SAVED_WINE_STYLE : SAVED_SPIRITS_STYLE;
+    sel.name = craft === 'wine' ? 'wine_style' : 'spirits_style';
+    document.getElementById('style-label').textContent = craft === 'wine' ? 'Wine Style' : 'Spirits Style';
+    groups.forEach(([groupLabel, opts]) => {
+      const og = document.createElement('optgroup');
+      og.label = groupLabel;
+      opts.forEach(([val, label]) => {
+        const o = document.createElement('option');
+        o.value = val; o.textContent = label;
+        if (saved && val === saved) o.selected = true;
+        og.appendChild(o);
+      });
+      sel.appendChild(og);
+    });
+  }
+  updateStyleTargets();
 }
 
 const CRAFT_FIELD_LABELS = {
@@ -730,16 +757,14 @@ const CRAFT_TYPE_OPTIONS = {
 function updateCraftSections() {
   const craft = document.getElementById('craft-select').value;
 
-  // Show/hide craft-specific cards (not option elements which also use data-craft for equipment filtering)
+  // Show/hide craft-specific cards
   document.querySelectorAll('.card[data-craft]').forEach(el => {
     const crafts = el.dataset.craft.split(',');
     el.style.display = crafts.includes(craft) ? '' : 'none';
   });
 
-  // Style dropdowns
-  document.getElementById('style-field-beer').style.display    = craft === 'beer'    ? '' : 'none';
-  document.getElementById('style-field-wine').style.display    = craft === 'wine'    ? '' : 'none';
-  document.getElementById('style-field-spirits').style.display = craft === 'spirits' ? '' : 'none';
+  // Repopulate the single style dropdown
+  _populateStyleSelect(craft);
 
   // Type dropdown
   const typeField  = document.getElementById('type-field');
@@ -761,29 +786,24 @@ function updateCraftSections() {
 
   // Field labels per craft
   const labels = CRAFT_FIELD_LABELS[craft] || CRAFT_FIELD_LABELS.beer;
-  document.getElementById('batch-label').textContent     = labels.batch;
-  document.getElementById('boil-label').textContent      = labels.boil;
-  document.getElementById('boil-time-label').textContent = labels.time;
+  document.getElementById('batch-label').textContent      = labels.batch;
+  document.getElementById('boil-label').textContent       = labels.boil;
+  document.getElementById('boil-time-label').textContent  = labels.time;
   document.getElementById('efficiency-label').textContent = labels.eff;
 
-  // Equipment filter by craft
+  // Equipment: show only profiles tagged to this craft
   const eqSel = document.getElementById('equipment_select');
   Array.from(eqSel.options).forEach(opt => {
     if (!opt.value) return;
     opt.hidden = opt.dataset.craft !== craft;
-    if (opt.hidden && opt.selected) { eqSel.value = ''; }
+    if (opt.hidden && opt.selected) eqSel.value = '';
   });
 }
-document.addEventListener('DOMContentLoaded', () => {
-  // Build wine + spirits style dropdowns with saved values
-  const savedWineStyle    = {{ ('"' + recipe.wine_style + '"') if recipe and recipe.wine_style else 'null' }};
-  const savedSpiritsStyle = {{ ('"' + recipe.spirits_style + '"') if recipe and recipe.spirits_style else 'null' }};
-  _buildGroupedSelect(document.getElementById('wine-style-select'),    WINE_STYLES,    savedWineStyle);
-  _buildGroupedSelect(document.getElementById('spirits-style-select'), SPIRITS_STYLES, savedSpiritsStyle);
 
-  // Restore type select saved value
-  const savedType = {{ ('"' + recipe.type + '"') if recipe and recipe.type else '"All Grain"' }};
+document.addEventListener('DOMContentLoaded', () => {
+  const savedType = {{ (recipe.type)|tojson if recipe and recipe.type else '"All Grain"' }};
   updateCraftSections();
+  // Restore type after craft sections rebuild it
   document.getElementById('type-select').value = savedType;
 });
 
@@ -1027,9 +1047,10 @@ function renderGauge(id, label, value, lo, hi, fmt, suffix) {
 }
 
 function updateStyleTargets() {
-  const sel  = document.querySelector('[name="style_id"]');
+  const sel  = document.getElementById('style-select');
   const card = document.getElementById('style-targets-card');
   if (!card || !sel) return;
+  // Gauges only make sense for beer styles (which carry OG/FG/IBU/SRM range data)
   const opt = sel.options[sel.selectedIndex];
   if (!opt?.value || !opt.dataset.ogMin) { card.style.display = 'none'; return; }
 
