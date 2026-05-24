@@ -9,7 +9,7 @@ class BrewSession(Base):
 
     id = Column(Integer, primary_key=True)
     recipe_id = Column(Integer, ForeignKey("recipes.id"), nullable=False)
-    equipment_id = Column(Integer, ForeignKey("equipment.id"), nullable=True)  # override
+    equipment_id = Column(Integer, ForeignKey("equipment.id"), nullable=True)
     craft = Column(String(20), default="beer")  # beer, wine, spirits
 
     status = Column(String(20), default="planned")   # planned, brewing, fermenting, conditioning, complete
@@ -25,6 +25,14 @@ class BrewSession(Base):
 
     # Fermentation tracking
     ferment_temp_c = Column(Float)
+
+    # Wine harvest intake (populated once at crush/intake)
+    brix_intake = Column(Float)             # Brix at crush
+    ph_intake = Column(Float)               # pH at intake
+    ta_intake_g_l = Column(Float)           # titratable acidity g/L
+    fruit_weight_kg = Column(Float)         # total fruit/must weight
+    crush_date = Column(DateTime)           # date of crush/pressing
+    fruit_source = Column(String(300))      # vineyard, supplier, variety
 
     notes = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -47,4 +55,16 @@ class BrewSession(Base):
         back_populates="session",
         cascade="all, delete-orphan",
         order_by="FermentationReading.recorded_at",
+    )
+    mlf_entries = relationship(
+        "WineMLFEntry",
+        back_populates="session",
+        cascade="all, delete-orphan",
+        order_by="WineMLFEntry.recorded_at",
+    )
+    fining_entries = relationship(
+        "WineFiningEntry",
+        back_populates="session",
+        cascade="all, delete-orphan",
+        order_by="WineFiningEntry.date",
     )

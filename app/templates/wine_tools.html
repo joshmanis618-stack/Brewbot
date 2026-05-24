@@ -1,0 +1,343 @@
+{% extends "base.html" %}
+{% block title %}Wine Tools — Brewbot{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-droplet-half me-2 text-primary"></i>Wine Tools</h1>
+</div>
+
+<div class="row g-4">
+
+  <!-- SO₂ Management Calculator -->
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-shield-check me-2"></i>SO₂ Management Calculator
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Calculates molecular SO₂ from free SO₂ and pH. Target 0.6–0.8 ppm molecular SO₂
+          for antimicrobial protection. Also computes how much K₂S₂O₅ (potassium metabisulfite)
+          or Camden tablets to add.
+        </p>
+        <div class="row g-3 mb-3">
+          <div class="col-md-4">
+            <label class="form-label">Wine pH</label>
+            <input type="number" id="so2_ph" class="form-control" step="0.01" min="2.8" max="4.5"
+                   value="3.4" oninput="calcSO2()">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Current Free SO₂ (ppm)</label>
+            <input type="number" id="so2_current" class="form-control" step="1" min="0"
+                   value="25" oninput="calcSO2()">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Target Molecular SO₂ (ppm)</label>
+            <input type="number" id="so2_target_mol" class="form-control" step="0.1" min="0.1" max="2.0"
+                   value="0.8" oninput="calcSO2()">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Wine Volume (L)</label>
+            <input type="number" id="so2_volume" class="form-control" step="1" min="1"
+                   value="23" oninput="calcSO2()">
+          </div>
+        </div>
+
+        <div id="so2_results" class="mt-3">
+          <!-- filled by JS -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SO₂ Reference Table -->
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-table me-2"></i>Free SO₂ Targets by pH (0.8 ppm molecular)
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0">
+          <thead>
+            <tr>
+              <th>pH</th>
+              <th class="text-end">Free SO₂ needed (ppm)</th>
+              <th class="text-end">Molecular SO₂ at 30 ppm free</th>
+            </tr>
+          </thead>
+          <tbody id="so2_table_body">
+            <!-- filled by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Acid Adjustment Calculator -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-arrow-left-right me-2"></i>Acid Adjustment Calculator
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Estimate how much tartaric acid to add to raise TA, or water/low-acid juice to blend
+          for lowering TA. All values are approximations — confirm with bench trials.
+        </p>
+        <div class="row g-3">
+          <div class="col-md-3">
+            <label class="form-label">Current TA (g/L)</label>
+            <input type="number" id="acid_ta_current" class="form-control" step="0.1"
+                   value="5.5" oninput="calcAcid()">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Target TA (g/L)</label>
+            <input type="number" id="acid_ta_target" class="form-control" step="0.1"
+                   value="6.5" oninput="calcAcid()">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Volume (L)</label>
+            <input type="number" id="acid_volume" class="form-control" step="1"
+                   value="23" oninput="calcAcid()">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Acid type</label>
+            <select id="acid_type" class="form-select" onchange="calcAcid()">
+              <option value="tartaric">Tartaric</option>
+              <option value="citric">Citric</option>
+              <option value="malic">Malic</option>
+            </select>
+          </div>
+        </div>
+        <div id="acid_results" class="mt-3"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chaptalisation Calculator -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-plus-slash-minus me-2"></i>Sugar / Chaptalisation Calculator
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Calculate how much sugar (or honey) to add to reach a target Brix or potential ABV.
+          1 Brix ≈ 0.59% potential ABV.
+        </p>
+        <div class="row g-3">
+          <div class="col-md-3">
+            <label class="form-label">Current Brix</label>
+            <input type="number" id="chap_brix" class="form-control" step="0.1"
+                   value="21.0" oninput="calcChap()">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Target Brix</label>
+            <input type="number" id="chap_target" class="form-control" step="0.1"
+                   value="24.0" oninput="calcChap()">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Must Volume (L)</label>
+            <input type="number" id="chap_volume" class="form-control" step="1"
+                   value="100" oninput="calcChap()">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Sugar type</label>
+            <select id="chap_type" class="form-select" onchange="calcChap()">
+              <option value="sucrose">Sucrose (table)</option>
+              <option value="dextrose">Dextrose (corn)</option>
+              <option value="honey">Honey (~80% sugar)</option>
+            </select>
+          </div>
+        </div>
+        <div id="chap_results" class="mt-3"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── SO₂ calculator ────────────────────────────────────────────────────────────
+const KA = 1.74e-4;  // dissociation constant for sulfurous acid at 20°C
+
+function molSO2(freePpm, pH) {
+  const hPlus = Math.pow(10, -pH);
+  const fracMolecular = hPlus / (hPlus + KA);
+  return freePpm * fracMolecular;
+}
+
+function freeForMolTarget(molTarget, pH) {
+  const hPlus = Math.pow(10, -pH);
+  const fracMolecular = hPlus / (hPlus + KA);
+  return molTarget / fracMolecular;
+}
+
+function calcSO2() {
+  const pH       = parseFloat(document.getElementById('so2_ph').value) || 3.4;
+  const current  = parseFloat(document.getElementById('so2_current').value) || 0;
+  const molTarget= parseFloat(document.getElementById('so2_target_mol').value) || 0.8;
+  const volumeL  = parseFloat(document.getElementById('so2_volume').value) || 23;
+
+  const currentMol = molSO2(current, pH);
+  const targetFree = freeForMolTarget(molTarget, pH);
+  const deficit    = Math.max(0, targetFree - current);
+
+  // K2S2O5 is 57.6% SO2 by weight; each Camden tablet ≈ 0.44g K2S2O5
+  const mgSO2needed = deficit * volumeL;   // ppm * L = mg
+  const gK2S2O5    = mgSO2needed / 1000 / 0.576;
+  const camden     = gK2S2O5 / 0.44;
+
+  const molClass = currentMol < 0.5 ? 'danger' : currentMol < 0.8 ? 'warning' : 'success';
+  const statusText = currentMol < 0.5
+    ? 'Low — wine is at risk of oxidation / microbial spoilage'
+    : currentMol < 0.8
+    ? 'Marginal — consider a small SO₂ addition'
+    : 'Good — wine is protected';
+
+  const el = document.getElementById('so2_results');
+  el.innerHTML = `
+    <div class="alert alert-${molClass} py-2 px-3 mb-3 small fw-semibold">${statusText}</div>
+    <div class="row g-2 text-center mb-3">
+      <div class="col-4">
+        <div class="card bg-body-secondary h-100">
+          <div class="card-body py-2">
+            <div class="small text-muted">Molecular SO₂ now</div>
+            <div class="fw-bold fs-5 text-${molClass}">${currentMol.toFixed(2)} ppm</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="card bg-body-secondary h-100">
+          <div class="card-body py-2">
+            <div class="small text-muted">Free SO₂ needed for ${molTarget} ppm mol.</div>
+            <div class="fw-bold fs-5">${targetFree.toFixed(0)} ppm</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="card bg-body-secondary h-100">
+          <div class="card-body py-2">
+            <div class="small text-muted">Free SO₂ to add</div>
+            <div class="fw-bold fs-5 ${deficit > 0 ? 'text-warning' : 'text-success'}">${deficit > 0 ? '+' + deficit.toFixed(0) : '0'} ppm</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    ${deficit > 0 ? `
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead><tr><th>Addition form</th><th class="text-end">Amount for ${volumeL} L</th></tr></thead>
+        <tbody>
+          <tr><td>K₂S₂O₅ powder (57.6% SO₂)</td><td class="text-end fw-semibold">${(gK2S2O5 * 1000).toFixed(0)} mg&nbsp;(${gK2S2O5.toFixed(2)} g)</td></tr>
+          <tr><td>Camden tablets (0.44 g K₂S₂O₅ each)</td><td class="text-end fw-semibold">${camden.toFixed(1)} tablets</td></tr>
+          <tr><td>10% SO₂ solution (mL)</td><td class="text-end fw-semibold">${(mgSO2needed / 1000 / 0.10).toFixed(1)} mL</td></tr>
+        </tbody>
+      </table>
+    </div>` : '<p class="text-success small">No addition needed — free SO₂ is above target.</p>'}`;
+}
+
+function buildSO2Table() {
+  const tbody = document.getElementById('so2_table_body');
+  const pHs = [2.9, 3.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 4.0];
+  tbody.innerHTML = pHs.map(pH => {
+    const need = freeForMolTarget(0.8, pH);
+    const mol30 = molSO2(30, pH);
+    const cls = need > 80 ? 'text-danger' : need > 50 ? 'text-warning' : '';
+    return `<tr>
+      <td>${pH.toFixed(1)}</td>
+      <td class="text-end fw-semibold ${cls}">${need.toFixed(0)} ppm</td>
+      <td class="text-end">${mol30.toFixed(2)} ppm</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Acid adjustment ───────────────────────────────────────────────────────────
+function calcAcid() {
+  const current = parseFloat(document.getElementById('acid_ta_current').value) || 0;
+  const target  = parseFloat(document.getElementById('acid_ta_target').value) || 0;
+  const vol     = parseFloat(document.getElementById('acid_volume').value) || 1;
+  const type    = document.getElementById('acid_type').value;
+  const el      = document.getElementById('acid_results');
+
+  const diff = target - current;
+  if (Math.abs(diff) < 0.01) {
+    el.innerHTML = '<p class="text-muted small">TA is already at target.</p>';
+    return;
+  }
+
+  const typeNames = { tartaric: 'Tartaric acid', citric: 'Citric acid', malic: 'Malic acid' };
+  const name = typeNames[type] || type;
+
+  if (diff > 0) {
+    // Adding acid: 1 g/L TA increase ≈ 1 g/L acid addition (tartaric), slightly different for others
+    const factors = { tartaric: 1.0, citric: 0.935, malic: 1.12 };  // relative to tartaric
+    const factor = factors[type] || 1.0;
+    const gPerL  = diff * factor;
+    const totalG = gPerL * vol;
+    el.innerHTML = `<div class="alert alert-info py-2 px-3 small">
+      Add <strong>${totalG.toFixed(1)} g ${name}</strong> to ${vol} L
+      to raise TA from ${current.toFixed(1)} → ${target.toFixed(1)} g/L.
+      <br><small class="text-muted">Rate: ${gPerL.toFixed(2)} g/L. Bench trial recommended before full addition.</small>
+    </div>`;
+  } else {
+    el.innerHTML = `<div class="alert alert-info py-2 px-3 small">
+      To lower TA by ${Math.abs(diff).toFixed(1)} g/L, consider cold stabilization (tartrate precipitation),
+      deacidification with potassium bicarbonate (~${(Math.abs(diff) * 0.67 * vol).toFixed(0)} g for ${vol} L),
+      or blending with a lower-acid lot.
+    </div>`;
+  }
+}
+
+// ── Chaptalisation ────────────────────────────────────────────────────────────
+function calcChap() {
+  const brix   = parseFloat(document.getElementById('chap_brix').value) || 0;
+  const target = parseFloat(document.getElementById('chap_target').value) || 0;
+  const vol    = parseFloat(document.getElementById('chap_volume').value) || 1;
+  const type   = document.getElementById('chap_type').value;
+  const el     = document.getElementById('chap_results');
+
+  const deltaBrix = target - brix;
+  if (deltaBrix <= 0) {
+    el.innerHTML = '<p class="text-muted small">Target Brix is not higher than current — no sugar addition needed.</p>';
+    return;
+  }
+
+  // g sugar per L to raise 1 Brix ≈ 17 g/L (for must, accounting for volume change)
+  const gPerL = deltaBrix * 17.1;
+  const totalG = gPerL * vol;
+  const typeFactors = { sucrose: 1.0, dextrose: 1.05, honey: 1.25 };
+  const factor = typeFactors[type] || 1.0;
+  const addG = totalG * factor;
+  const typeNames = { sucrose: 'sucrose', dextrose: 'dextrose', honey: 'honey' };
+  const name = typeNames[type];
+
+  const abvNow    = brix * 0.59;
+  const abvTarget = target * 0.59;
+
+  el.innerHTML = `<div class="alert alert-info py-2 px-3 small">
+    Add <strong>${addG.toFixed(0)} g ${name}</strong> (${(addG/1000).toFixed(2)} kg) to ${vol} L must.
+    <br>Estimated ABV: <strong>${abvNow.toFixed(1)}% → ${abvTarget.toFixed(1)}%</strong>
+    <br><small class="text-muted">Dissolve in a small volume of warm must before adding. Verify with hydrometer after mixing.</small>
+  </div>`;
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+buildSO2Table();
+calcSO2();
+calcAcid();
+calcChap();
+</script>
+{% endblock %}
+
+{% block page_help %}
+<h6>SO₂ Management</h6>
+<p>Sulfur dioxide (SO₂) protects wine from oxidation and microbial spoilage. The active fraction is <em>molecular</em> SO₂, which is highly pH-dependent. At pH 3.4, only ~3% of your free SO₂ is in the molecular form; at pH 3.8, only ~1%. Target 0.6–0.8 ppm molecular SO₂ for table wines.</p>
+<p>K₂S₂O₅ (potassium metabisulfite) is 57.6% SO₂ by weight. Camden tablets each contain approximately 0.44 g K₂S₂O₅.</p>
+<h6>Acid Adjustment</h6>
+<p>Tartaric acid is the most stable and wine-native acid for additions. Citric acid can be metabolized by bacteria (use with caution before MLF). Malic acid is naturally present in grapes but also metabolized during MLF.</p>
+<h6>Chaptalisation</h6>
+<p>Adding sugar raises Brix and therefore potential ABV. Sucrose must be dissolved first. Dextrose and honey require slightly larger additions for the same Brix increase due to lower sucrose content. Always bench trial before a full addition.</p>
+{% endblock %}

@@ -23,6 +23,7 @@ from app.models.user import User
 from app.models.barrel import Barrel, BarrelAgingRecord, BarrelAgingEntry
 from app.models.grape_variety import GrapeVariety, RecipeGrape
 from app.models.mash_step import MashStep
+from app.models.wine import WineMLFEntry, WineFiningEntry
 import json
 from app.services import backup as backup_service
 from app.services import beerxml as beerxml_service
@@ -942,6 +943,19 @@ async def brew_session_update(session_id: int, request: Request, db: Session = D
     session.actual_batch_size_l = float(form["actual_batch_size_l"]) if form.get("actual_batch_size_l") else None
     session.actual_efficiency = float(form["actual_efficiency"]) if form.get("actual_efficiency") else None
     session.ferment_temp_c = float(form["ferment_temp_c"]) if form.get("ferment_temp_c") else None
+    # Wine harvest intake fields
+    session.brix_intake = float(form["brix_intake"]) if form.get("brix_intake") else None
+    session.ph_intake = float(form["ph_intake"]) if form.get("ph_intake") else None
+    session.ta_intake_g_l = float(form["ta_intake_g_l"]) if form.get("ta_intake_g_l") else None
+    session.fruit_weight_kg = float(form["fruit_weight_kg"]) if form.get("fruit_weight_kg") else None
+    session.fruit_source = form.get("fruit_source") or None
+    if form.get("crush_date"):
+        try:
+            session.crush_date = datetime.strptime(form["crush_date"], "%Y-%m-%d")
+        except ValueError:
+            pass
+    else:
+        session.crush_date = None
     db.commit()
     return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
 
@@ -1393,6 +1407,8 @@ def brew_session_detail(session_id: int, request: Request, db: Session = Depends
         selectinload(BrewSession.fermentation_readings),
         selectinload(BrewSession.barrel_aging_records).selectinload(BarrelAgingRecord.barrel),
         selectinload(BrewSession.barrel_aging_records).selectinload(BarrelAgingRecord.entries),
+        selectinload(BrewSession.mlf_entries),
+        selectinload(BrewSession.fining_entries),
     ).filter(BrewSession.id == session_id).first()
     if not session:
         return RedirectResponse("/brew-sessions", status_code=303)
@@ -1458,6 +1474,83 @@ def brew_session_reading_delete(session_id: int, reading_id: int, db: Session = 
         db.delete(reading)
         db.commit()
     return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+
+
+# ── Wine MLF entries ─────────────────────────────────────────────────────────
+
+@router.post("/brew-sessions/{session_id}/mlf-entries")
+async def mlf_entry_create(session_id: int, request: Request, db: Session = Depends(get_db)):
+    session = db.get(BrewSession, session_id)
+    if not session:
+        return RedirectResponse("/brew-sessions", status_code=303)
+    form = await request.form()
+    recorded_at_str = form.get("recorded_at", "")
+    try:
+        recorded_at = datetime.strptime(recorded_at_str, "%Y-%m-%d")
+    except (ValueError, TypeError):
+        recorded_at = datetime.utcnow()
+    db.add(WineMLFEntry(
+        session_id=session_id,
+        recorded_at=recorded_at,
+        event_type=form.get("event_type", "test"),
+        strain=form.get("strain") or None,
+        temperature_c=float(form["temperature_c"]) if form.get("temperature_c") else None,
+        result=form.get("result") or None,
+        notes=form.get("notes") or None,
+    ))
+    db.commit()
+    return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+
+
+@router.post("/brew-sessions/{session_id}/mlf-entries/{entry_id}/delete")
+def mlf_entry_delete(session_id: int, entry_id: int, db: Session = Depends(get_db)):
+    entry = db.get(WineMLFEntry, entry_id)
+    if entry and entry.session_id == session_id:
+        db.delete(entry)
+        db.commit()
+    return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+
+
+# ── Wine fining entries ───────────────────────────────────────────────────────
+
+@router.post("/brew-sessions/{session_id}/fining-entries")
+async def fining_entry_create(session_id: int, request: Request, db: Session = Depends(get_db)):
+    session = db.get(BrewSession, session_id)
+    if not session:
+        return RedirectResponse("/brew-sessions", status_code=303)
+    form = await request.form()
+    date_str = form.get("date", "")
+    try:
+        date = datetime.strptime(date_str, "%Y-%m-%d")
+    except (ValueError, TypeError):
+        date = datetime.utcnow()
+    db.add(WineFiningEntry(
+        session_id=session_id,
+        date=date,
+        agent=form.get("agent", ""),
+        rate_g_per_hl=float(form["rate_g_per_hl"]) if form.get("rate_g_per_hl") else None,
+        volume_l=float(form["volume_l"]) if form.get("volume_l") else None,
+        purpose=form.get("purpose") or None,
+        notes=form.get("notes") or None,
+    ))
+    db.commit()
+    return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+
+
+@router.post("/brew-sessions/{session_id}/fining-entries/{entry_id}/delete")
+def fining_entry_delete(session_id: int, entry_id: int, db: Session = Depends(get_db)):
+    entry = db.get(WineFiningEntry, entry_id)
+    if entry and entry.session_id == session_id:
+        db.delete(entry)
+        db.commit()
+    return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+
+
+# ── Wine tools ────────────────────────────────────────────────────────────────
+
+@router.get("/wine-tools", response_class=HTMLResponse)
+def wine_tools_page(request: Request):
+    return templates.TemplateResponse(request, "wine_tools.html", {"page": "wine_tools"})
 
 
 # ── Barrel registry ──────────────────────────────────────────────────────────

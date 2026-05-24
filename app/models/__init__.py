@@ -14,6 +14,7 @@ from .fermentation_reading import FermentationReading
 from .barrel import Barrel, BarrelAgingRecord, BarrelAgingEntry
 from .grape_variety import GrapeVariety, RecipeGrape
 from .mash_step import MashStep
+from .wine import WineMLFEntry, WineFiningEntry
 
 __all__ = [
     "Base",
@@ -44,4 +45,6 @@ __all__ = [
     "GrapeVariety",
     "RecipeGrape",
     "MashStep",
+    "WineMLFEntry",
+    "WineFiningEntry",
 ]

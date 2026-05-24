@@ -153,6 +153,46 @@
                    value="{{ '%.1f'|format(session.actual_efficiency) if session.actual_efficiency else '' }}" placeholder="72.0">
           </div>
         </div>
+        {% set is_wine = session.craft == 'wine' or (session.recipe and session.recipe.craft == 'wine') %}
+        {% if is_wine %}
+        <div class="row g-3 mb-3">
+          <div class="col-12"><hr class="my-1"><small class="text-muted fw-semibold text-uppercase">Harvest Intake</small></div>
+          <div class="col-md-2">
+            <label class="form-label">Crush Date</label>
+            <input type="date" name="crush_date" class="form-control"
+                   value="{{ session.crush_date.strftime('%Y-%m-%d') if session.crush_date else '' }}">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Brix at Crush</label>
+            <input type="number" name="brix_intake" class="form-control"
+                   step="0.1" min="0" max="50"
+                   value="{{ '%.1f'|format(session.brix_intake) if session.brix_intake else '' }}" placeholder="22.5">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">pH at Intake</label>
+            <input type="number" name="ph_intake" class="form-control"
+                   step="0.01" min="2" max="5"
+                   value="{{ '%.2f'|format(session.ph_intake) if session.ph_intake else '' }}" placeholder="3.40">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">TA (g/L)</label>
+            <input type="number" name="ta_intake_g_l" class="form-control"
+                   step="0.1" min="0"
+                   value="{{ '%.1f'|format(session.ta_intake_g_l) if session.ta_intake_g_l else '' }}" placeholder="6.5">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Fruit Weight (kg)</label>
+            <input type="number" name="fruit_weight_kg" class="form-control"
+                   step="0.5" min="0"
+                   value="{{ session.fruit_weight_kg or '' }}" placeholder="100">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Fruit Source / Variety</label>
+            <input type="text" name="fruit_source" class="form-control"
+                   value="{{ session.fruit_source or '' }}" placeholder="e.g. Napa Valley Cabernet Sauvignon, Estate Block 3">
+          </div>
+        </div>
+        {% endif %}
         <div class="mb-3">
           <label class="form-label">Notes</label>
           <textarea name="notes" class="form-control" rows="3" placeholder="Brew day notes…">{{ session.notes or '' }}</textarea>
@@ -172,6 +212,56 @@
     </div>
   </div>
 </div>
+
+{% set is_wine = session.craft == 'wine' or (session.recipe and session.recipe.craft == 'wine') %}
+{% if is_wine and (session.brix_intake or session.ph_intake or session.ta_intake_g_l or session.fruit_source) %}
+<!-- Harvest Intake Summary -->
+<div class="card mb-4">
+  <div class="card-header fw-semibold">
+    <i class="bi bi-tree me-1"></i>Harvest Intake
+  </div>
+  <div class="card-body">
+    <div class="row g-3">
+      {% if session.crush_date %}
+      <div class="col-6 col-md-2">
+        <div class="small text-muted">Crush Date</div>
+        <div class="fw-semibold">{{ session.crush_date.strftime('%Y-%m-%d') }}</div>
+      </div>
+      {% endif %}
+      {% if session.brix_intake %}
+      <div class="col-6 col-md-2">
+        <div class="small text-muted">Brix</div>
+        <div class="fw-semibold">{{ '%.1f'|format(session.brix_intake) }}°Bx</div>
+      </div>
+      {% endif %}
+      {% if session.ph_intake %}
+      <div class="col-6 col-md-2">
+        <div class="small text-muted">pH</div>
+        <div class="fw-semibold">{{ '%.2f'|format(session.ph_intake) }}</div>
+      </div>
+      {% endif %}
+      {% if session.ta_intake_g_l %}
+      <div class="col-6 col-md-2">
+        <div class="small text-muted">TA</div>
+        <div class="fw-semibold">{{ '%.1f'|format(session.ta_intake_g_l) }} g/L</div>
+      </div>
+      {% endif %}
+      {% if session.fruit_weight_kg %}
+      <div class="col-6 col-md-2">
+        <div class="small text-muted">Fruit Weight</div>
+        <div class="fw-semibold">{{ session.fruit_weight_kg }} kg</div>
+      </div>
+      {% endif %}
+      {% if session.fruit_source %}
+      <div class="col-12 col-md-6">
+        <div class="small text-muted">Source / Variety</div>
+        <div class="fw-semibold">{{ session.fruit_source }}</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
 
 <!-- Fermentation Chart -->
 <div class="card mb-4">
@@ -293,6 +383,223 @@
         {% endfor %}
       </tbody>
     </table>
+  </div>
+</div>
+{% endif %}
+
+{% if is_wine %}
+<!-- MLF Tracker -->
+<div class="card mb-4">
+  <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-activity me-1"></i>Malolactic Fermentation (MLF)</span>
+    {% if session.mlf_entries %}
+    {% set last = session.mlf_entries[-1] %}
+    {% if last.result == 'complete' %}
+    <span class="badge bg-success">Complete</span>
+    {% elif last.result == 'positive' %}
+    <span class="badge bg-info">Active</span>
+    {% else %}
+    <span class="badge bg-secondary">Monitoring</span>
+    {% endif %}
+    {% endif %}
+  </div>
+  {% if session.mlf_entries %}
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Event</th>
+          <th>Strain / Result</th>
+          <th>Temp (°C)</th>
+          <th>Notes</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in session.mlf_entries %}
+        <tr>
+          <td>{{ e.recorded_at.strftime('%Y-%m-%d') }}</td>
+          <td><span class="badge bg-secondary text-capitalize">{{ e.event_type }}</span></td>
+          <td>
+            {% if e.strain %}<span class="fw-semibold">{{ e.strain }}</span>{% endif %}
+            {% if e.result %}
+            <span class="badge ms-1
+              {{ 'bg-success' if e.result == 'complete' else ('bg-info' if e.result == 'positive' else 'bg-secondary') }}
+              text-capitalize">{{ e.result }}</span>
+            {% endif %}
+          </td>
+          <td>{{ '%.1f'|format(e.temperature_c) if e.temperature_c else '—' }}</td>
+          <td><small class="text-muted">{{ e.notes or '—' }}</small></td>
+          <td class="text-end">
+            <form method="post" action="/brew-sessions/{{ session.id }}/mlf-entries/{{ e.id }}/delete"
+                  onsubmit="return confirm('Delete this MLF entry?')">
+              <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="text-center text-muted py-3 small">No MLF entries yet — log inoculation and test results below.</div>
+  {% endif %}
+  <div class="card-footer bg-body-secondary">
+    <div class="fw-semibold mb-2 small text-uppercase text-muted">Log MLF Event</div>
+    <form method="post" action="/brew-sessions/{{ session.id }}/mlf-entries">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-2">
+          <label class="form-label small">Date</label>
+          <input type="date" name="recorded_at" class="form-control form-control-sm"
+                 value="{{ now_dt.strftime('%Y-%m-%d') }}" required>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Event Type</label>
+          <select name="event_type" class="form-select form-select-sm">
+            <option value="inoculation">Inoculation</option>
+            <option value="test" selected>Test</option>
+            <option value="complete">Complete</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Strain <span class="text-muted">(inoculation)</span></label>
+          <input type="text" name="strain" class="form-control form-control-sm" placeholder="e.g. VP41, MLB31">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Result</label>
+          <select name="result" class="form-select form-select-sm">
+            <option value="">—</option>
+            <option value="positive">Positive (active)</option>
+            <option value="negative">Negative (complete)</option>
+            <option value="complete">Complete (confirmed)</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Temp (°C)</label>
+          <input type="number" name="temperature_c" class="form-control form-control-sm"
+                 step="0.5" placeholder="18.0">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Notes</label>
+          <input type="text" name="notes" class="form-control form-control-sm" placeholder="Optional">
+        </div>
+        <div class="col-12">
+          <button type="submit" class="btn btn-brew btn-sm">
+            <i class="bi bi-plus-lg me-1"></i>Add Entry
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Fining Agent Log -->
+<div class="card mb-4">
+  <div class="card-header fw-semibold">
+    <i class="bi bi-funnel me-1"></i>Fining Agent Log
+  </div>
+  {% if session.fining_entries %}
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Agent</th>
+          <th class="text-end">Rate (g/hL)</th>
+          <th class="text-end">Volume (L)</th>
+          <th class="text-end">Total (g)</th>
+          <th>Purpose</th>
+          <th>Notes</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in session.fining_entries %}
+        <tr>
+          <td>{{ e.date.strftime('%Y-%m-%d') }}</td>
+          <td class="fw-semibold">{{ e.agent }}</td>
+          <td class="text-end">{{ '%.1f'|format(e.rate_g_per_hl) if e.rate_g_per_hl else '—' }}</td>
+          <td class="text-end">{{ e.volume_l or '—' }}</td>
+          <td class="text-end">
+            {% if e.rate_g_per_hl and e.volume_l %}
+            {{ '%.1f'|format(e.rate_g_per_hl * e.volume_l / 100) }}
+            {% else %}—{% endif %}
+          </td>
+          <td><small class="text-muted">{{ e.purpose or '—' }}</small></td>
+          <td><small class="text-muted">{{ e.notes or '—' }}</small></td>
+          <td class="text-end">
+            <form method="post" action="/brew-sessions/{{ session.id }}/fining-entries/{{ e.id }}/delete"
+                  onsubmit="return confirm('Delete this fining entry?')">
+              <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="text-center text-muted py-3 small">No fining entries yet.</div>
+  {% endif %}
+  <div class="card-footer bg-body-secondary">
+    <div class="fw-semibold mb-2 small text-uppercase text-muted">Add Fining</div>
+    <form method="post" action="/brew-sessions/{{ session.id }}/fining-entries">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-2">
+          <label class="form-label small">Date</label>
+          <input type="date" name="date" class="form-control form-control-sm"
+                 value="{{ now_dt.strftime('%Y-%m-%d') }}" required>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Agent <span class="text-danger">*</span></label>
+          <input list="fining-agents-list" name="agent" class="form-control form-control-sm" required placeholder="e.g. Bentonite">
+          <datalist id="fining-agents-list">
+            <option value="Bentonite">
+            <option value="Gelatin">
+            <option value="Egg White">
+            <option value="Isinglass">
+            <option value="Chitosan">
+            <option value="Kieselsol">
+            <option value="Sparkolloid">
+            <option value="PVPP (Polyclar)">
+            <option value="Tartaric Acid">
+            <option value="Sulfur Dioxide (SO₂)">
+          </datalist>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Rate (g/hL)</label>
+          <input type="number" name="rate_g_per_hl" class="form-control form-control-sm"
+                 step="0.5" placeholder="50">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Volume (L)</label>
+          <input type="number" name="volume_l" class="form-control form-control-sm"
+                 step="0.5" placeholder="{{ session.actual_batch_size_l or '' }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Purpose</label>
+          <input list="fining-purpose-list" name="purpose" class="form-control form-control-sm" placeholder="e.g. protein stability">
+          <datalist id="fining-purpose-list">
+            <option value="Protein stability">
+            <option value="Clarity / haze removal">
+            <option value="Tannin reduction">
+            <option value="Color stabilization">
+            <option value="Tartrate stability">
+            <option value="Microbial stabilization">
+          </datalist>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Notes</label>
+          <input type="text" name="notes" class="form-control form-control-sm" placeholder="Optional">
+        </div>
+        <div class="col-12">
+          <button type="submit" class="btn btn-brew btn-sm">
+            <i class="bi bi-plus-lg me-1"></i>Add Fining
+          </button>
+        </div>
+      </div>
+    </form>
   </div>
 </div>
 {% endif %}

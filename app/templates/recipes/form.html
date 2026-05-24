@@ -232,7 +232,7 @@
             <thead><tr>
               <th style="width:32px;">#</th>
               <th style="min-width:130px;">Step Name</th>
-              <th style="width:100px;">Temp (°C)</th>
+              <th style="width:100px;">Temp (<span data-ulabel="°C|°F">°C</span>)</th>
               <th style="width:90px;">Time (min)</th>
               <th style="min-width:160px;">Additions</th>
               <th style="min-width:140px;">Notes</th>
@@ -247,7 +247,8 @@
                            class="form-control form-control-sm" value="{{ ms.name or '' }}"
                            placeholder="e.g. Cereal Cook"></td>
                 <td><input name="mash_temp_c_{{ loop.index0 }}" type="number" step="0.5"
-                           class="form-control form-control-sm" value="{{ ms.temp_c }}" required></td>
+                           class="form-control form-control-sm" value="{{ ms.temp_c }}" required
+                           data-utype="temp_c"></td>
                 <td><input name="mash_time_min_{{ loop.index0 }}" type="number"
                            class="form-control form-control-sm" value="{{ ms.time_min }}" required></td>
                 <td><input name="mash_additions_{{ loop.index0 }}" type="text"
@@ -829,6 +830,7 @@ let brewUnits = document.body.dataset.units || localStorage.getItem('brewbot_uni
 const L2G  = v => v * 0.264172,  G2L  = v => v / 0.264172;
 const KG2LB = v => v * 2.20462,  LB2KG = v => v / 2.20462;
 const G2OZ  = v => v * 0.035274, OZ2G  = v => v / 0.035274;
+const C2F  = v => v * 9/5 + 32,  F2C  = v => (v - 32) * 5/9;
 
 function toggleUnits() {
   const next = brewUnits === 'metric' ? 'imperial' : 'metric';
@@ -862,6 +864,10 @@ function convertFormUnits(from, to) {
     if (el.value === '') return;
     el.value = imp ? G2OZ(+el.value).toFixed(2) : OZ2G(+el.value).toFixed(1);
   });
+  document.querySelectorAll('[data-utype="temp_c"]').forEach(el => {
+    if (el.value === '') return;
+    el.value = imp ? C2F(+el.value).toFixed(1) : F2C(+el.value).toFixed(1);
+  });
 }
 
 function syncUnitLabels() {
@@ -877,6 +883,9 @@ function syncUnitLabels() {
   });
   document.querySelectorAll('input[data-utype="vol"]').forEach(el => {
     el.placeholder = imp ? 'gal' : 'L';
+  });
+  document.querySelectorAll('input[data-utype="temp_c"]').forEach(el => {
+    el.placeholder = imp ? '°F' : '°C';
   });
   const btn = document.getElementById('units-btn');
   if (btn) btn.textContent = imp ? 'Imperial' : 'Metric';
