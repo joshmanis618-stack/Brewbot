@@ -823,7 +823,8 @@ const _baseRemove = window.removeRow;
 window.removeRow = function(btn) { _baseRemove(btn); recalculate(); };
 
 // ── Unit system ───────────────────────────────────────────────────────────────
-let brewUnits = localStorage.getItem('brewbot_units') || 'metric';
+// Authoritative source: server session (body data-units), fallback to localStorage
+let brewUnits = document.body.dataset.units || localStorage.getItem('brewbot_units') || 'metric';
 
 const L2G  = v => v * 0.264172,  G2L  = v => v / 0.264172;
 const KG2LB = v => v * 2.20462,  LB2KG = v => v / 2.20462;
@@ -834,6 +835,14 @@ function toggleUnits() {
   convertFormUnits(brewUnits, next);
   brewUnits = next;
   localStorage.setItem('brewbot_units', brewUnits);
+  document.body.dataset.units = brewUnits;
+  // Keep server session in sync so other pages see the same unit preference
+  fetch('/set-units', {
+    method: 'POST',
+    body: new URLSearchParams({units: brewUnits}),
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    credentials: 'same-origin',
+  });
   syncUnitLabels();
   recalculate();
 }
