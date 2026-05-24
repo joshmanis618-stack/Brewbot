@@ -805,6 +805,47 @@ def brew_session_step_skip(session_id: int, session_step_id: int, db: Session = 
     return RedirectResponse(f"/brew-sessions/{session_id}/run", status_code=303)
 
 
+@router.post("/brew-sessions/{session_id}/update")
+async def brew_session_update(session_id: int, request: Request, db: Session = Depends(get_db)):
+    session = db.get(BrewSession, session_id)
+    if not session:
+        return RedirectResponse("/brew-sessions", status_code=303)
+    form = await request.form()
+    session.status = form.get("status", session.status)
+    session.notes = form.get("notes") or None
+    if form.get("brew_date"):
+        try:
+            session.brew_date = datetime.strptime(form["brew_date"], "%Y-%m-%d")
+        except ValueError:
+            pass
+    else:
+        session.brew_date = None
+    if form.get("package_date"):
+        try:
+            session.package_date = datetime.strptime(form["package_date"], "%Y-%m-%d")
+        except ValueError:
+            pass
+    else:
+        session.package_date = None
+    session.actual_og = float(form["actual_og"]) if form.get("actual_og") else None
+    session.actual_fg = float(form["actual_fg"]) if form.get("actual_fg") else None
+    session.actual_abv = float(form["actual_abv"]) if form.get("actual_abv") else None
+    session.actual_batch_size_l = float(form["actual_batch_size_l"]) if form.get("actual_batch_size_l") else None
+    session.actual_efficiency = float(form["actual_efficiency"]) if form.get("actual_efficiency") else None
+    session.ferment_temp_c = float(form["ferment_temp_c"]) if form.get("ferment_temp_c") else None
+    db.commit()
+    return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+
+
+@router.post("/brew-sessions/{session_id}/delete")
+def brew_session_delete(session_id: int, db: Session = Depends(get_db)):
+    session = db.get(BrewSession, session_id)
+    if session:
+        db.delete(session)
+        db.commit()
+    return RedirectResponse("/brew-sessions", status_code=303)
+
+
 # ── Brew programs ─────────────────────────────────────────────────────────────
 
 @router.get("/brew-programs", response_class=HTMLResponse)

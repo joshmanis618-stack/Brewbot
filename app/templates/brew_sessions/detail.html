@@ -84,6 +84,95 @@
   </div>
 </div>
 
+<!-- Edit Session -->
+<div class="card mb-4">
+  <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-pencil-square me-1"></i>Edit Session</span>
+    <button class="btn btn-sm btn-outline-secondary" type="button"
+            data-bs-toggle="collapse" data-bs-target="#editSessionBody">
+      <i class="bi bi-chevron-down"></i>
+    </button>
+  </div>
+  <div class="collapse" id="editSessionBody">
+    <div class="card-body">
+      <form method="post" action="/brew-sessions/{{ session.id }}/update">
+        <div class="row g-3 mb-3">
+          <div class="col-md-3">
+            <label class="form-label">Status</label>
+            <select name="status" class="form-select">
+              {% for s in ['planned','brewing','fermenting','conditioning','complete'] %}
+              <option value="{{ s }}" {% if session.status == s %}selected{% endif %}>{{ s|title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Brew Date</label>
+            <input type="date" name="brew_date" class="form-control"
+                   value="{{ session.brew_date.strftime('%Y-%m-%d') if session.brew_date else '' }}">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Package Date</label>
+            <input type="date" name="package_date" class="form-control"
+                   value="{{ session.package_date.strftime('%Y-%m-%d') if session.package_date else '' }}">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Ferment Temp (°C)</label>
+            <input type="number" name="ferment_temp_c" class="form-control"
+                   step="0.1" value="{{ session.ferment_temp_c or '' }}" placeholder="e.g. 20.0">
+          </div>
+        </div>
+        <div class="row g-3 mb-3">
+          <div class="col-md-2">
+            <label class="form-label">Actual OG</label>
+            <input type="number" name="actual_og" class="form-control"
+                   step="0.001" min="0.990" max="1.200"
+                   value="{{ '%.3f'|format(session.actual_og) if session.actual_og else '' }}" placeholder="1.050">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Actual FG</label>
+            <input type="number" name="actual_fg" class="form-control"
+                   step="0.001" min="0.990" max="1.200"
+                   value="{{ '%.3f'|format(session.actual_fg) if session.actual_fg else '' }}" placeholder="1.010">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Actual ABV (%)</label>
+            <input type="number" name="actual_abv" class="form-control"
+                   step="0.1" min="0" max="30"
+                   value="{{ '%.1f'|format(session.actual_abv) if session.actual_abv else '' }}" placeholder="5.2">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Batch Size (L)</label>
+            <input type="number" name="actual_batch_size_l" class="form-control"
+                   step="0.1" min="0"
+                   value="{{ session.actual_batch_size_l or '' }}" placeholder="19.0">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Efficiency (%)</label>
+            <input type="number" name="actual_efficiency" class="form-control"
+                   step="0.1" min="0" max="100"
+                   value="{{ '%.1f'|format(session.actual_efficiency) if session.actual_efficiency else '' }}" placeholder="72.0">
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Notes</label>
+          <textarea name="notes" class="form-control" rows="3" placeholder="Brew day notes…">{{ session.notes or '' }}</textarea>
+        </div>
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-brew">
+            <i class="bi bi-check-lg me-1"></i>Save Changes
+          </button>
+          <form method="post" action="/brew-sessions/{{ session.id }}/delete" class="d-inline"
+                onsubmit="return confirm('Delete this brew session? All readings and steps will be lost.')">
+            <button type="submit" class="btn btn-outline-danger">
+              <i class="bi bi-trash me-1"></i>Delete Session
+            </button>
+          </form>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <!-- Fermentation Chart -->
 <div class="card mb-4">
   <div class="card-header fw-semibold">
