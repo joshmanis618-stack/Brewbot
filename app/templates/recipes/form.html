@@ -14,7 +14,11 @@
 </div>
 
 <form id="recipe-form" method="post"
-      action="{{ '/recipes/' + recipe.id|string + '/update' if recipe else '/recipes' }}">
+      action="{{ '/recipes/' + recipe.id|string + '/update' if recipe else '/recipes' }}"
+      data-saved-style-id="{{ recipe.style_id or '' }}"
+      data-saved-wine-style="{{ recipe.wine_style or '' }}"
+      data-saved-spirits-style="{{ recipe.spirits_style or '' }}"
+      data-saved-type="{{ recipe.type or 'All Grain' }}">
 
   <div class="row g-4">
     <!-- ── Main column ──────────────────────────────────────────────── -->
@@ -703,7 +707,8 @@ const SPIRITS_STYLES = [
 ];
 
 function _populateStyleSelect(craft) {
-  const sel = document.getElementById('style-select');
+  const form = document.getElementById('recipe-form');
+  const sel  = document.getElementById('style-select');
   sel.innerHTML = '';
 
   if (craft === 'beer') {
@@ -716,8 +721,8 @@ function _populateStyleSelect(craft) {
   } else {
     const groups = craft === 'wine' ? WINE_STYLES : SPIRITS_STYLES;
     const saved  = craft === 'wine'
-      ? {{ (recipe.wine_style)|tojson if recipe and recipe.wine_style else 'null' }}
-      : {{ (recipe.spirits_style)|tojson if recipe and recipe.spirits_style else 'null' }};
+      ? (form.dataset.savedWineStyle || '')
+      : (form.dataset.savedSpiritsStyle || '');
     sel.name = craft === 'wine' ? 'wine_style' : 'spirits_style';
     document.getElementById('style-label').textContent = craft === 'wine' ? 'Wine Style' : 'Spirits Style';
     const none = document.createElement('option');
@@ -797,13 +802,13 @@ function updateCraftSections() {
   });
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+// Script is at end of <body> so DOM is ready — call directly, no DOMContentLoaded needed
+(function initCraftSections() {
   updateCraftSections();
-  // Re-apply saved type after updateCraftSections rebuilds the type dropdown
-  const savedType = {{ (recipe.type)|tojson if recipe and recipe.type else '"All Grain"' }};
+  const savedType = document.getElementById('recipe-form').dataset.savedType || 'All Grain';
   const typeEl = document.getElementById('type-select');
   if (typeEl) typeEl.value = savedType;
-});
+})();
 
 // ── Row counters ──────────────────────────────────────────────────────────────
 _rowCounters['fermentable'] = document.querySelectorAll('[data-row-type="fermentable"]').length;
@@ -1074,11 +1079,9 @@ document.getElementById('recipe-form').addEventListener('submit', () => {
   if (brewUnits === 'imperial') convertFormUnits('imperial', 'metric');
 });
 
-// ── Init ──────────────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-  applyCurrentUnits();
-  recalculate();
-});
+// ── Init (DOM is ready — script is at end of body) ───────────────────────────
+applyCurrentUnits();
+recalculate();
 
 document.body.addEventListener('htmx:afterSwap', () => {
   // Apply units to newly inserted rows, then recalc
