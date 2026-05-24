@@ -1,0 +1,129 @@
+{# Shared barrel form fields.
+   Expects: bid (unique id string), bsaved (Barrel object or none) #}
+{% set sv = bsaved %}
+
+<div class="row g-3">
+
+  <!-- Name -->
+  <div class="col-12">
+    <label class="form-label">Name <span class="text-danger">*</span></label>
+    <input type="text" name="name" class="form-control" required
+           value="{{ sv.name if sv else '' }}"
+           placeholder="e.g. Bourbon Barrel #1, Bad Motivator 19L">
+  </div>
+
+  <!-- Style + Size -->
+  <div class="col-md-6">
+    <label class="form-label">Barrel Style</label>
+    <select name="barrel_style" class="form-select"
+            data-bid="{{ bid }}" onchange="barrelStyleChanged(this)">
+      <option value="traditional" {% if not sv or sv.barrel_style != 'bad_motivator' %}selected{% endif %}>
+        Traditional Oak Barrel
+      </option>
+      <option value="bad_motivator" {% if sv and sv.barrel_style == 'bad_motivator' %}selected{% endif %}>
+        Bad Motivator (Stainless + Wood Lid)
+      </option>
+    </select>
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Volume (L) <span class="text-danger">*</span></label>
+    <input type="number" name="size_l" id="size_l-{{ bid }}" class="form-control" step="0.1" min="0.5" required
+           value="{{ sv.size_l if sv else '' }}" placeholder="200"
+           oninput="updateBMTarget('{{ bid }}')">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Storage Temp (°C)</label>
+    <input type="number" name="storage_temp_c" class="form-control" step="0.5" min="-5" max="50"
+           value="{{ sv.storage_temp_c if sv else '' }}" placeholder="15">
+  </div>
+
+  <!-- Bad Motivator fields (hidden unless style=bad_motivator) -->
+  <div id="bm-fields-{{ bid }}"
+       {% if not sv or sv.barrel_style != 'bad_motivator' %}style="display:none;"{% endif %}>
+    <div class="card border-info-subtle bg-info-subtle mb-0">
+      <div class="card-body py-2 px-3">
+        <p class="small fw-semibold mb-2"><i class="bi bi-calculator me-1"></i>Wood Contact Area</p>
+        <div class="row g-2 mb-2">
+          <div class="col-md-5">
+            <label class="form-label small mb-1" id="lid-dim1-label-{{ bid }}">Lid diameter (cm)</label>
+            <input type="number" id="lid-dim1-{{ bid }}" class="form-control form-control-sm"
+                   step="0.5" min="1" placeholder="30" oninput="calcLidArea('{{ bid }}')">
+          </div>
+          <div id="lid-dim2-group-{{ bid }}" style="display:none;" class="col-md-4">
+            <label class="form-label small mb-1">Length (cm)</label>
+            <input type="number" id="lid-dim2-{{ bid }}" class="form-control form-control-sm"
+                   step="0.5" min="1" placeholder="40" oninput="calcLidArea('{{ bid }}')">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small mb-1">Lid shape</label>
+            <select id="lid-shape-{{ bid }}" class="form-select form-select-sm"
+                    onchange="lidShapeChanged('{{ bid }}'); calcLidArea('{{ bid }}')">
+              <option value="circle">Circle</option>
+              <option value="rectangle">Rectangle</option>
+            </select>
+          </div>
+        </div>
+        <div class="row g-2 align-items-end">
+          <div class="col-md-6">
+            <label class="form-label small mb-1">Extra wood (staves/spirals/cubes) cm²</label>
+            <input type="number" id="lid-extra-{{ bid }}" class="form-control form-control-sm"
+                   step="1" min="0" placeholder="0" oninput="calcLidArea('{{ bid }}')">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small mb-1">Total wood contact area (cm²)</label>
+            <input type="number" name="wood_contact_area_cm2" id="wood_contact_area_cm2-{{ bid }}"
+                   class="form-control form-control-sm fw-bold" step="1" min="1"
+                   value="{{ sv.wood_contact_area_cm2 | round | int if sv and sv.wood_contact_area_cm2 else '' }}"
+                   placeholder="auto-calculated or type directly">
+          </div>
+        </div>
+        <p class="small text-muted mt-2 mb-0">
+          <i class="bi bi-info-circle me-1"></i>53-gal equivalent for your volume:
+          <strong id="bm-target-{{ bid }}">—</strong> cm²
+          <span class="ms-1 text-muted">(= 75 cm²/L × your volume)</span>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Wood characteristics -->
+  <div class="col-md-4">
+    <label class="form-label">Wood Type</label>
+    <select name="wood_type" class="form-select">
+      <option value="">— None —</option>
+      {% for w in wood_types %}
+      <option {% if sv and sv.wood_type == w %}selected{% endif %}>{{ w }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-4">
+    <label class="form-label">Char / Toast</label>
+    <select name="char_level" class="form-select">
+      <option value="">— None —</option>
+      {% for c in char_levels %}
+      <option {% if sv and sv.char_level == c %}selected{% endif %}>{{ c }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-4">
+    <label class="form-label">Previous Contents</label>
+    <select name="previous_contents" class="form-select">
+      <option value="">— None —</option>
+      {% for p in previous_contents %}
+      <option {% if sv and sv.previous_contents == p %}selected{% endif %}>{{ p }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="col-md-4">
+    <label class="form-label">Barrel Age (months)</label>
+    <input type="number" name="age_months" class="form-control" min="0"
+           value="{{ sv.age_months if sv else '' }}" placeholder="0 = new">
+  </div>
+
+  <div class="col-12">
+    <label class="form-label">Notes</label>
+    <textarea name="notes" class="form-control" rows="2">{{ sv.notes if sv else '' }}</textarea>
+  </div>
+
+</div>

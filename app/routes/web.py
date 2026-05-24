@@ -1450,11 +1450,14 @@ async def barrel_create(request: Request, db: Session = Depends(get_db)):
     form = await request.form()
     db.add(Barrel(
         name=form["name"],
+        barrel_style=form.get("barrel_style") or "traditional",
         size_l=float(form["size_l"]),
         wood_type=form.get("wood_type") or None,
         char_level=form.get("char_level") or None,
         previous_contents=form.get("previous_contents") or None,
         age_months=int(form["age_months"]) if form.get("age_months") else None,
+        wood_contact_area_cm2=float(form["wood_contact_area_cm2"]) if form.get("wood_contact_area_cm2") else None,
+        storage_temp_c=float(form["storage_temp_c"]) if form.get("storage_temp_c") else None,
         notes=form.get("notes") or None,
     ))
     db.commit()
@@ -1468,11 +1471,14 @@ async def barrel_update(barrel_id: int, request: Request, db: Session = Depends(
         return RedirectResponse("/barrels", status_code=303)
     form = await request.form()
     barrel.name = form["name"]
+    barrel.barrel_style = form.get("barrel_style") or "traditional"
     barrel.size_l = float(form["size_l"])
     barrel.wood_type = form.get("wood_type") or None
     barrel.char_level = form.get("char_level") or None
     barrel.previous_contents = form.get("previous_contents") or None
     barrel.age_months = int(form["age_months"]) if form.get("age_months") else None
+    barrel.wood_contact_area_cm2 = float(form["wood_contact_area_cm2"]) if form.get("wood_contact_area_cm2") else None
+    barrel.storage_temp_c = float(form["storage_temp_c"]) if form.get("storage_temp_c") else None
     barrel.notes = form.get("notes") or None
     db.commit()
     return RedirectResponse("/barrels", status_code=303)
