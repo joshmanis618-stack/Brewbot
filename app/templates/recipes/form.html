@@ -63,6 +63,22 @@
               </select>
             </div>
 
+            <!-- Hidden beer-style option bank (server-rendered, cloned by JS) -->
+            <select id="beer-styles-data" hidden aria-hidden="true">
+              <option value="">— None —</option>
+              {% for s in styles %}
+              <option value="{{ s.id }}"
+                      data-og-min="{{ s.og_min or '' }}" data-og-max="{{ s.og_max or '' }}"
+                      data-fg-min="{{ s.fg_min or '' }}" data-fg-max="{{ s.fg_max or '' }}"
+                      data-abv-min="{{ s.abv_min or '' }}" data-abv-max="{{ s.abv_max or '' }}"
+                      data-ibu-min="{{ s.ibu_min or '' }}" data-ibu-max="{{ s.ibu_max or '' }}"
+                      data-srm-min="{{ s.color_min or '' }}" data-srm-max="{{ s.color_max or '' }}"
+                      {{ 'selected' if recipe and recipe.style_id == s.id }}>
+                {{ s.name }}{% if s.style_guide %} ({{ s.style_guide }}){% endif %}
+              </option>
+              {% endfor %}
+            </select>
+
             <!-- Equipment: craft-filtered -->
             <div class="col-md-6">
               <label class="form-label">Equipment Profile</label>
@@ -555,17 +571,7 @@
 <script>
 // ── Style data ────────────────────────────────────────────────────────────────
 
-// Beer styles from DB (for gauge data attributes)
-const BEER_STYLES = [
-  {% for s in styles %}
-  { id: {{ s.id }}, name: {{ s.name|tojson }}{% if s.style_guide %}, guide: {{ s.style_guide|tojson }}{% endif %},
-    ogMin: {{ s.og_min or 'null' }}, ogMax: {{ s.og_max or 'null' }},
-    fgMin: {{ s.fg_min or 'null' }}, fgMax: {{ s.fg_max or 'null' }},
-    abvMin: {{ s.abv_min or 'null' }}, abvMax: {{ s.abv_max or 'null' }},
-    ibuMin: {{ s.ibu_min or 'null' }}, ibuMax: {{ s.ibu_max or 'null' }},
-    srmMin: {{ s.color_min or 'null' }}, srmMax: {{ s.color_max or 'null' }} },
-  {% endfor %}
-];
+// Beer styles sourced from the hidden #beer-styles-data select (server-rendered HTML, no Jinja2-in-JS)
 
 // Wine styles: grouped [group, [[value, label], …]]
 const WINE_STYLES = [
@@ -696,36 +702,27 @@ const SPIRITS_STYLES = [
   ]],
 ];
 
-// Saved values (for edit mode)
-const SAVED_STYLE_ID      = {{ recipe.style_id or 'null' }};
-const SAVED_WINE_STYLE    = {{ (recipe.wine_style)|tojson if recipe and recipe.wine_style else 'null' }};
-const SAVED_SPIRITS_STYLE = {{ (recipe.spirits_style)|tojson if recipe and recipe.spirits_style else 'null' }};
-
 function _populateStyleSelect(craft) {
   const sel = document.getElementById('style-select');
-  sel.innerHTML = '<option value="">— None —</option>';
+  sel.innerHTML = '';
 
   if (craft === 'beer') {
     sel.name = 'style_id';
     document.getElementById('style-label').textContent = 'Beer Style';
-    BEER_STYLES.forEach(s => {
-      const o = document.createElement('option');
-      o.value = s.id;
-      o.textContent = s.name + (s.guide ? ` (${s.guide})` : '');
-      o.dataset.ogMin = s.ogMin; o.dataset.ogMax = s.ogMax;
-      o.dataset.fgMin = s.fgMin; o.dataset.fgMax = s.fgMax;
-      o.dataset.abvMin = s.abvMin; o.dataset.abvMax = s.abvMax;
-      o.dataset.ibuMin = s.ibuMin; o.dataset.ibuMax = s.ibuMax;
-      o.dataset.srmMin = s.srmMin; o.dataset.srmMax = s.srmMax;
-      if (SAVED_STYLE_ID && s.id == SAVED_STYLE_ID) o.selected = true;
-      sel.appendChild(o);
-    });
+    // Clone options from the server-rendered hidden bank — preserves all data-* attributes
+    const bank = document.getElementById('beer-styles-data');
+    Array.from(bank.options).forEach(o => sel.appendChild(o.cloneNode(true)));
 
   } else {
     const groups = craft === 'wine' ? WINE_STYLES : SPIRITS_STYLES;
-    const saved  = craft === 'wine' ? SAVED_WINE_STYLE : SAVED_SPIRITS_STYLE;
+    const saved  = craft === 'wine'
+      ? {{ (recipe.wine_style)|tojson if recipe and recipe.wine_style else 'null' }}
+      : {{ (recipe.spirits_style)|tojson if recipe and recipe.spirits_style else 'null' }};
     sel.name = craft === 'wine' ? 'wine_style' : 'spirits_style';
     document.getElementById('style-label').textContent = craft === 'wine' ? 'Wine Style' : 'Spirits Style';
+    const none = document.createElement('option');
+    none.value = ''; none.textContent = '— None —';
+    sel.appendChild(none);
     groups.forEach(([groupLabel, opts]) => {
       const og = document.createElement('optgroup');
       og.label = groupLabel;
@@ -801,10 +798,11 @@ function updateCraftSections() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  const savedType = {{ (recipe.type)|tojson if recipe and recipe.type else '"All Grain"' }};
   updateCraftSections();
-  // Restore type after craft sections rebuild it
-  document.getElementById('type-select').value = savedType;
+  // Re-apply saved type after updateCraftSections rebuilds the type dropdown
+  const savedType = {{ (recipe.type)|tojson if recipe and recipe.type else '"All Grain"' }};
+  const typeEl = document.getElementById('type-select');
+  if (typeEl) typeEl.value = savedType;
 });
 
 // ── Row counters ──────────────────────────────────────────────────────────────
