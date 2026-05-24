@@ -97,11 +97,24 @@
               <label class="form-label">Still Type</label>
               <select name="still_type" class="form-select">
                 <option value="">— Select —</option>
-                <option>Pot Still</option>
-                <option>Column / Reflux Still</option>
-                <option>Hybrid Still</option>
-                <option>Alembic (Cognac Style)</option>
-                <option>Continuous Column</option>
+                <optgroup label="Pot Still Configurations">
+                  <option>Pot Still</option>
+                  <option>Pot Still with Gin Basket</option>
+                  <option>Pot Still with Thumper / Doubler</option>
+                  <option>Pot Still with Retort</option>
+                  <option>Pot Still with Gin Basket &amp; Thumper</option>
+                </optgroup>
+                <optgroup label="Column Configurations">
+                  <option>Column / Reflux Still</option>
+                  <option>Continuous Column Still</option>
+                  <option>Vacuum / Rotary Evaporator</option>
+                </optgroup>
+                <optgroup label="Hybrid &amp; Traditional">
+                  <option>Hybrid Still (Pot + Column)</option>
+                  <option>Alembic / Charentais (Cognac Style)</option>
+                  <option>Alembic with Thumper</option>
+                  <option>Coffey Still (Patent Still)</option>
+                </optgroup>
               </select>
             </div>
 

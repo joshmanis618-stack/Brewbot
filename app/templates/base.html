@@ -15,9 +15,9 @@
   <div class="container-fluid px-4">
     {% set current_craft = request.session.get('craft', 'beer') %}
     <a class="navbar-brand fw-bold" href="/">
-      {% if current_craft == 'wine' %}<i class="bi bi-tree me-1"></i>Winebot
-      {% elif current_craft == 'spirits' %}<i class="bi bi-fire me-1"></i>Spiritbot
-      {% else %}<i class="bi bi-thermometer-half me-1"></i>Brewbot{% endif %}
+      {% if current_craft == 'wine' %}🍇 Winebot
+      {% elif current_craft == 'spirits' %}🍾 Spiritbot
+      {% else %}🍺 Brewbot{% endif %}
     </a>
     <div class="dropdown me-2">
       <button class="btn btn-sm btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
@@ -99,7 +99,7 @@
         </li>
         <li class="nav-item">
           <a class="nav-link rounded px-3 {% if page == 'barrels' %}active{% endif %}" href="/barrels">
-            <i class="bi bi-archive me-1"></i>Barrels
+            🛢️ Barrels
           </a>
         </li>
         <li class="nav-item">
