@@ -2,6 +2,8 @@
 {% block title %}Barrel Registry — Brewbot{% endblock %}
 
 {% block content %}
+{% set u = request.session.get('units', 'metric') %}
+
 <div class="page-header d-flex justify-content-between align-items-center">
   <h1>
     <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 16 16" fill="none"
@@ -25,11 +27,10 @@
       <div class="col">
         <p class="small mb-1 fw-semibold">Surface Area-to-Volume (SA:V) determines how fast wood character develops</p>
         <p class="small text-muted mb-0">
-          A 53-gallon barrel sits at <strong>~75 cm²/L</strong> — the industry benchmark. Smaller barrels have
-          higher SA:V and extract oak compounds faster. Temperature adds a second multiplier: every +10°C roughly
-          doubles the reaction rate (Arrhenius rule of thumb). A <strong>Bad Motivator</strong> setup — a stainless
-          bain-marie with a wood lid — lets you control SA:V precisely by sizing the wood contact area to target
-          any desired aging rate, including matching 55-gallon character at small scale.
+          A 53-gallon barrel sits at <strong>~{{ ref_sav(u) }} {{ sav_unit(u) }}</strong> — the industry benchmark.
+          Smaller barrels extract oak compounds faster due to higher SA:V. Temperature adds a second multiplier:
+          every +10°C / +18°F roughly doubles the reaction rate. A <strong>Bad Motivator</strong> setup — a stainless
+          bain-marie with a wood lid — lets you match 55-gallon character at any vessel size by sizing the wood contact area.
         </p>
       </div>
     </div>
@@ -42,6 +43,7 @@
   {% set sav = b.effective_sav %}
   {% set mult = b.aging_multiplier %}
   {% set is_bm = b.barrel_style == 'bad_motivator' %}
+  {% set active_recs = active_by_barrel.get(b.id, []) %}
   <div class="col-md-6 col-xl-4">
     <div class="card h-100">
       <div class="card-body">
@@ -51,7 +53,7 @@
           <div>
             <h5 class="card-title mb-1">{{ b.name }}</h5>
             <div class="d-flex gap-1 flex-wrap">
-              <span class="badge bg-secondary">{{ b.size_l }} L</span>
+              <span class="badge bg-secondary">{{ b.size_l | disp_vol(u) }} {{ vol_unit(u) }}</span>
               {% if is_bm %}
               <span class="badge bg-info text-dark">Bad Motivator</span>
               {% else %}
@@ -60,9 +62,52 @@
               {% if b.wood_type %}
               <span class="badge bg-secondary">{{ b.wood_type }}</span>
               {% endif %}
+              {% if active_recs %}
+              <span class="badge bg-success">
+                <i class="bi bi-activity me-1"></i>Aging {{ active_recs|length }} batch{{ 'es' if active_recs|length > 1 else '' }}
+              </span>
+              {% endif %}
             </div>
           </div>
         </div>
+
+        <!-- Active aging sessions -->
+        {% if active_recs %}
+        <div class="mb-3">
+          {% for rec in active_recs %}
+          {% set days_in = (now_dt - rec.start_date).days %}
+          {% set recipe_name = rec.session.recipe.name if rec.session and rec.session.recipe else 'Unknown' %}
+          {% set eq_months = ((days_in / 30.0) * mult) | round(1) if mult else '—' %}
+          <div class="border rounded px-2 py-1 mb-1 small">
+            <div class="d-flex justify-content-between align-items-center">
+              <span class="fw-semibold">{{ recipe_name }}</span>
+              <a href="/brew-sessions/{{ rec.session_id }}" class="btn btn-sm btn-outline-secondary py-0 px-1"
+                 style="font-size:0.7rem;">View</a>
+            </div>
+            <div class="text-muted">
+              Day {{ days_in }}
+              {% if mult %}— <strong>~{{ eq_months }}mo</strong> 55-gal equiv.{% endif %}
+              {% if rec.target_55gal_months %}
+              <span class="ms-1 text-success">/ {{ rec.target_55gal_months }}mo target</span>
+              {% elif rec.target_days %}
+              <span class="ms-1">/ {{ rec.target_days }}d target</span>
+              {% endif %}
+            </div>
+            {% if rec.entries %}
+            {% set last = rec.entries[-1] %}
+            <div class="text-muted" style="font-size:0.72rem;">
+              Last tasting {{ last.recorded_at.strftime('%b %d') }}
+              {% if last.color_srm %}
+              <span class="ms-1 d-inline-block rounded" style="width:10px;height:10px;background:{{ last.color_srm | srm_hex }};vertical-align:middle;border:1px solid #ccc;"></span>
+              SRM {{ last.color_srm | round(1) }}
+              {% endif %}
+              {% if last.flavor_notes %}· {{ last.flavor_notes[:40] }}{% if last.flavor_notes|length > 40 %}…{% endif %}{% endif %}
+            </div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
 
         <!-- SA:V bar + metrics -->
         {% if sav %}
@@ -72,13 +117,13 @@
             <small class="text-muted fw-semibold">SA:V Ratio</small>
             <span class="fw-bold">{{ sav }} cm²/L</span>
           </div>
-          <div class="progress mb-1" style="height:8px;" title="{{ sav }} cm²/L">
+          <div class="progress mb-1" style="height:8px;">
             <div class="progress-bar {% if sav <= 90 %}bg-success{% elif sav <= 160 %}bg-warning{% else %}bg-danger{% endif %}"
                  style="width:{{ sav_pct }}%"></div>
           </div>
           <div class="d-flex justify-content-between" style="font-size:0.7rem;">
             <span class="text-muted">0</span>
-            <span class="text-muted">▲ 53-gal: 75</span>
+            <span class="text-muted">▲ 53-gal: {{ ref_sav(u) }} {{ sav_unit(u) }}</span>
             <span class="text-muted">200 cm²/L</span>
           </div>
         </div>
@@ -95,7 +140,7 @@
           </div>
           <div class="col-4">
             <div class="border rounded py-1 px-1">
-              <div class="fw-semibold">{{ b.storage_temp_c or 15 }}°C</div>
+              <div class="fw-semibold">{{ (b.storage_temp_c or 15) | disp_temp(u) }}{{ temp_unit(u) }}</div>
               <div style="font-size:0.68rem;" class="text-muted">storage</div>
             </div>
           </div>
@@ -116,19 +161,15 @@
         <div class="alert py-1 px-2 mb-2 {% if pct >= 90 %}alert-success{% elif pct >= 50 %}alert-warning{% else %}alert-info{% endif %}"
              style="font-size:0.78rem;">
           <i class="bi bi-lightbulb me-1"></i>
-          To match 53-gal SA:V in {{ b.size_l }} L: need <strong>{{ target }} cm²</strong> wood contact
-          {% if have %}
-          — you have <strong>{{ have | round | int }} cm²</strong>
-          <strong>({{ pct }}%)</strong>
-          {% else %}
-          — enter wood contact area above to see your match %
-          {% endif %}
+          53-gal equivalent for {{ b.size_l | disp_vol(u) }} {{ vol_unit(u) }}:
+          need <strong>{{ have | disp_area(u) if have else target | disp_area(u) }} {{ area_unit(u) }}</strong>
+          {% if have %}<strong>({{ pct }}% of {{ target | disp_area(u) }} {{ area_unit(u) }} target)</strong>{% endif %}
         </div>
         {% endif %}
 
         {% else %}
         <p class="text-muted small mb-2">
-          {% if is_bm %}Enter wood contact area to calculate SA:V.{% else %}—{% endif %}
+          {% if is_bm %}Enter wood contact area to calculate SA:V.{% endif %}
         </p>
         {% endif %}
 
@@ -138,7 +179,7 @@
             {% if b.char_level %}<tr><td class="text-muted py-0">Char/Toast</td><td class="py-0">{{ b.char_level }}</td></tr>{% endif %}
             {% if b.previous_contents %}<tr><td class="text-muted py-0">Previous</td><td class="py-0">{{ b.previous_contents }}</td></tr>{% endif %}
             {% if b.age_months %}<tr><td class="text-muted py-0">Barrel age</td><td class="py-0">{{ b.age_months }} months</td></tr>{% endif %}
-            {% if is_bm and b.wood_contact_area_cm2 %}<tr><td class="text-muted py-0">Wood contact</td><td class="py-0">{{ b.wood_contact_area_cm2 | round | int }} cm²</td></tr>{% endif %}
+            {% if is_bm and b.wood_contact_area_cm2 %}<tr><td class="text-muted py-0">Wood contact</td><td class="py-0">{{ b.wood_contact_area_cm2 | disp_area(u) }} {{ area_unit(u) }}</td></tr>{% endif %}
           </tbody>
         </table>
         {% if b.notes %}
@@ -236,37 +277,47 @@ function updateBMTarget(bid) {
   const spanEl = document.getElementById('bm-target-' + bid);
   if (!volEl || !spanEl) return;
   const vol = parseFloat(volEl.value) || 0;
-  spanEl.textContent = vol > 0 ? Math.round(75 * vol) : '—';
+  const isImperial = document.body.dataset.units === 'imperial';
+  // vol is in display units; convert to liters for the 75 cm²/L reference
+  const vol_l = isImperial ? vol * 3.785412 : vol;
+  const target_cm2 = Math.round(75 * vol_l);
+  // display target in user's area unit
+  const display = isImperial ? Math.round(target_cm2 / 6.4516 * 10) / 10 + ' in²' : target_cm2 + ' cm²';
+  spanEl.textContent = vol_l > 0 ? display : '—';
 }
 
 function calcLidArea(bid) {
   const shape = document.getElementById('lid-shape-' + bid).value;
-  let area = 0;
+  const isImperial = document.body.dataset.units === 'imperial';
+  let area_display = 0;
   if (shape === 'circle') {
     const d = parseFloat(document.getElementById('lid-dim1-' + bid).value) || 0;
-    area = Math.PI * Math.pow(d / 2, 2);
+    area_display = Math.PI * Math.pow(d / 2, 2);
   } else {
     const w = parseFloat(document.getElementById('lid-dim1-' + bid).value) || 0;
     const l = parseFloat(document.getElementById('lid-dim2-' + bid).value) || 0;
-    area = w * l;
+    area_display = w * l;
   }
   const extra = parseFloat(document.getElementById('lid-extra-' + bid).value) || 0;
-  const total = Math.round(area + extra);
-  document.getElementById('wood_contact_area_cm2-' + bid).value = total > 0 ? total : '';
+  // extra is also in display unit (in² or cm²)
+  const total_display = area_display + extra;
+  document.getElementById('wood_contact_area_cm2-' + bid).value =
+    total_display > 0 ? Math.round(total_display * 10) / 10 : '';
 }
 
 function lidShapeChanged(bid) {
   const shape = document.getElementById('lid-shape-' + bid).value;
-  document.getElementById('lid-dim1-label-' + bid).textContent = shape === 'circle' ? 'Lid diameter (cm)' : 'Width (cm)';
+  const isImperial = document.body.dataset.units === 'imperial';
+  const dim = isImperial ? 'in' : 'cm';
+  document.getElementById('lid-dim1-label-' + bid).textContent =
+    shape === 'circle' ? `Lid diameter (${dim})` : `Width (${dim})`;
   document.getElementById('lid-dim2-group-' + bid).style.display = shape === 'rectangle' ? '' : 'none';
 }
 
-// Initialise target area for all open / newly shown modals
 document.addEventListener('show.bs.modal', function(e) {
   const bid = e.target.querySelector('[data-bid]')?.dataset?.bid;
   if (bid) updateBMTarget(bid);
 });
-// Seed on page load for any pre-filled edit forms
 document.querySelectorAll('[id^="size_l-"]').forEach(el => {
   updateBMTarget(el.id.replace('size_l-', ''));
 });
@@ -283,16 +334,19 @@ document.querySelectorAll('[id^="size_l-"]').forEach(el => {
   <li><strong>1-gallon / 3.8 L</strong> — ~290 cm²/L (~3.9× faster)</li>
 </ul>
 <h6>Temperature Multiplier</h6>
-<p>Higher temps speed up all the extraction chemistry. Every 10°C above the 15°C cellar baseline roughly doubles the rate:</p>
+<p>Every +10°C / +18°F above the 15°C / 59°F cellar baseline roughly doubles the extraction rate:</p>
 <ul class="small">
-  <li>15°C → 1.0× (reference)</li>
-  <li>20°C → 1.4×</li>
-  <li>25°C → 2.0×</li>
-  <li>30°C → 2.8×</li>
+  <li>59°F / 15°C → 1.0× (reference)</li>
+  <li>68°F / 20°C → 1.4×</li>
+  <li>77°F / 25°C → 2.0×</li>
+  <li>86°F / 30°C → 2.8×</li>
 </ul>
 <h6>Bad Motivator Setup</h6>
-<p>A stainless bain-marie or food-grade drum with a solid wood lid. Only the wood lid (and any added staves, spirals, or cubes) counts toward SA:V. Choose this style and enter the wood contact area to calculate your effective aging rate and see how much wood you'd need to match 53-gallon character.</p>
-<p class="small text-muted">Tip: use the lid calculator in the form — enter lid diameter for a round lid, or width × length for a rectangular one, then add any extra wood insert area.</p>
+<p>A stainless bain-marie or food-grade drum with a solid wood lid (and optionally wood staves or spirals inside). Only the wood surface counts toward SA:V. Use the lid area calculator in the form to find your effective SA:V and see how it compares to a 53-gallon barrel.</p>
+<h6>Aging Planning</h6>
+<p>When starting a barrel aging record from a Brew Session, set a <em>Target 55-gal Equivalent Months</em> and the app calculates how many actual days you need based on your barrel's SA:V × temperature multiplier.</p>
+<h6>Color (SRM)</h6>
+<p>Log SRM with each tasting entry to track how the spirit darkens over time. Pale new-make spirit typically starts at 0–1 SRM; a 4-year bourbon is typically 10–20 SRM.</p>
 <h6>Wood Types</h6>
 <ul class="small">
   <li><strong>American Oak</strong> — vanilla, coconut, caramel</li>

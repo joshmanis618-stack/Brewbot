@@ -1,5 +1,5 @@
 {# Shared barrel form fields.
-   Expects: bid (unique id string), bsaved (Barrel object or none) #}
+   Expects: bid (unique id string), bsaved (Barrel object or none), u (units string) #}
 {% set sv = bsaved %}
 
 <div class="row g-3">
@@ -12,7 +12,7 @@
            placeholder="e.g. Bourbon Barrel #1, Bad Motivator 19L">
   </div>
 
-  <!-- Style + Size -->
+  <!-- Style + Size + Storage Temp -->
   <div class="col-md-6">
     <label class="form-label">Barrel Style</label>
     <select name="barrel_style" class="form-select"
@@ -26,35 +26,47 @@
     </select>
   </div>
   <div class="col-md-3">
-    <label class="form-label">Volume (L) <span class="text-danger">*</span></label>
-    <input type="number" name="size_l" id="size_l-{{ bid }}" class="form-control" step="0.1" min="0.5" required
-           value="{{ sv.size_l if sv else '' }}" placeholder="200"
+    <label class="form-label">Volume ({{ vol_unit(u) }}) <span class="text-danger">*</span></label>
+    <input type="number" name="size_l" id="size_l-{{ bid }}" class="form-control"
+           step="{{ '0.01' if u == 'imperial' else '0.1' }}" min="0.01" required
+           value="{{ sv.size_l | disp_vol(u) if sv and sv.size_l else '' }}"
+           placeholder="{{ '5.0' if u == 'imperial' else '19' }}"
            oninput="updateBMTarget('{{ bid }}')">
   </div>
   <div class="col-md-3">
-    <label class="form-label">Storage Temp (°C)</label>
-    <input type="number" name="storage_temp_c" class="form-control" step="0.5" min="-5" max="50"
-           value="{{ sv.storage_temp_c if sv else '' }}" placeholder="15">
+    <label class="form-label">Storage Temp ({{ temp_unit(u) }})</label>
+    <input type="number" name="storage_temp_c" class="form-control"
+           step="{{ '1' if u == 'imperial' else '0.5' }}"
+           min="{{ '-5' if u == 'metric' else '23' }}"
+           max="{{ '50' if u == 'metric' else '122' }}"
+           value="{{ sv.storage_temp_c | disp_temp(u) if sv and sv.storage_temp_c is not none else '' }}"
+           placeholder="{{ '59' if u == 'imperial' else '15' }}">
   </div>
 
   <!-- Bad Motivator fields (hidden unless style=bad_motivator) -->
-  <div id="bm-fields-{{ bid }}"
+  <div class="col-12" id="bm-fields-{{ bid }}"
        {% if not sv or sv.barrel_style != 'bad_motivator' %}style="display:none;"{% endif %}>
     <div class="card border-info-subtle bg-info-subtle mb-0">
       <div class="card-body py-2 px-3">
         <p class="small fw-semibold mb-2"><i class="bi bi-calculator me-1"></i>Wood Contact Area</p>
         <div class="row g-2 mb-2">
-          <div class="col-md-5">
-            <label class="form-label small mb-1" id="lid-dim1-label-{{ bid }}">Lid diameter (cm)</label>
+          <div class="col-md-4">
+            <label class="form-label small mb-1" id="lid-dim1-label-{{ bid }}">
+              Lid diameter ({{ 'in' if u == 'imperial' else 'cm' }})
+            </label>
             <input type="number" id="lid-dim1-{{ bid }}" class="form-control form-control-sm"
-                   step="0.5" min="1" placeholder="30" oninput="calcLidArea('{{ bid }}')">
+                   step="0.25" min="1" placeholder="{{ '12' if u == 'imperial' else '30' }}"
+                   oninput="calcLidArea('{{ bid }}')">
           </div>
           <div id="lid-dim2-group-{{ bid }}" style="display:none;" class="col-md-4">
-            <label class="form-label small mb-1">Length (cm)</label>
+            <label class="form-label small mb-1">
+              Length ({{ 'in' if u == 'imperial' else 'cm' }})
+            </label>
             <input type="number" id="lid-dim2-{{ bid }}" class="form-control form-control-sm"
-                   step="0.5" min="1" placeholder="40" oninput="calcLidArea('{{ bid }}')">
+                   step="0.25" min="1" placeholder="{{ '16' if u == 'imperial' else '40' }}"
+                   oninput="calcLidArea('{{ bid }}')">
           </div>
-          <div class="col-md-3">
+          <div class="col-md-4">
             <label class="form-label small mb-1">Lid shape</label>
             <select id="lid-shape-{{ bid }}" class="form-select form-select-sm"
                     onchange="lidShapeChanged('{{ bid }}'); calcLidArea('{{ bid }}')">
@@ -65,22 +77,26 @@
         </div>
         <div class="row g-2 align-items-end">
           <div class="col-md-6">
-            <label class="form-label small mb-1">Extra wood (staves/spirals/cubes) cm²</label>
+            <label class="form-label small mb-1">
+              Extra wood (staves/spirals) {{ area_unit(u) }}
+            </label>
             <input type="number" id="lid-extra-{{ bid }}" class="form-control form-control-sm"
                    step="1" min="0" placeholder="0" oninput="calcLidArea('{{ bid }}')">
           </div>
           <div class="col-md-6">
-            <label class="form-label small mb-1">Total wood contact area (cm²)</label>
+            <label class="form-label small mb-1">
+              Total wood contact area ({{ area_unit(u) }})
+            </label>
             <input type="number" name="wood_contact_area_cm2" id="wood_contact_area_cm2-{{ bid }}"
-                   class="form-control form-control-sm fw-bold" step="1" min="1"
-                   value="{{ sv.wood_contact_area_cm2 | round | int if sv and sv.wood_contact_area_cm2 else '' }}"
+                   class="form-control form-control-sm fw-bold" step="0.1" min="0.1"
+                   value="{{ sv.wood_contact_area_cm2 | disp_area(u) if sv and sv.wood_contact_area_cm2 else '' }}"
                    placeholder="auto-calculated or type directly">
           </div>
         </div>
         <p class="small text-muted mt-2 mb-0">
           <i class="bi bi-info-circle me-1"></i>53-gal equivalent for your volume:
-          <strong id="bm-target-{{ bid }}">—</strong> cm²
-          <span class="ms-1 text-muted">(= 75 cm²/L × your volume)</span>
+          <strong id="bm-target-{{ bid }}">—</strong>
+          <span class="ms-1 text-muted">(= {{ ref_sav(u) }} {{ sav_unit(u) }} × volume)</span>
         </p>
       </div>
     </div>

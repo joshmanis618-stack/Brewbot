@@ -69,6 +69,7 @@ class BarrelAgingRecord(Base):
     start_date = Column(DateTime, nullable=False, default=datetime.utcnow)
     end_date = Column(DateTime, nullable=True)
     target_days = Column(Integer, nullable=True)
+    target_55gal_months = Column(Float, nullable=True)  # planned equivalent 55-gal aging depth
     notes = Column(Text)
 
     barrel = relationship("Barrel", back_populates="aging_records")
@@ -89,6 +90,7 @@ class BarrelAgingEntry(Base):
     recorded_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     gravity = Column(Float)
     abv = Column(Float)
+    color_srm = Column(Float, nullable=True)  # color in SRM (1=pale straw → 40+=black)
     flavor_notes = Column(Text)
     notes = Column(Text)
 

@@ -339,6 +339,61 @@
         </div>
       </div>
 
+      <!-- Aging plan summary -->
+      {% set days_in = (now_dt - record.start_date).days %}
+      {% set barrel_mult = record.barrel.aging_multiplier %}
+      {% if barrel_mult %}
+      {% set eq_months = (days_in / 30.0 * barrel_mult) | round(1) %}
+      <div class="row g-2 mb-2 text-center small">
+        <div class="col-4 col-md-2">
+          <div class="border rounded py-1">
+            <div class="fw-bold">{{ days_in }}d</div>
+            <div class="text-muted" style="font-size:0.7rem;">in barrel</div>
+          </div>
+        </div>
+        <div class="col-4 col-md-2">
+          <div class="border rounded py-1">
+            <div class="fw-bold text-warning">{{ eq_months }}mo</div>
+            <div class="text-muted" style="font-size:0.7rem;">53-gal equiv.</div>
+          </div>
+        </div>
+        <div class="col-4 col-md-2">
+          <div class="border rounded py-1">
+            <div class="fw-bold">{{ barrel_mult }}×</div>
+            <div class="text-muted" style="font-size:0.7rem;">aging rate</div>
+          </div>
+        </div>
+        {% if record.target_55gal_months %}
+        <div class="col-6 col-md-3">
+          <div class="border rounded py-1 {% if eq_months >= record.target_55gal_months %}border-success{% endif %}">
+            <div class="fw-bold {% if eq_months >= record.target_55gal_months %}text-success{% endif %}">
+              {{ record.target_55gal_months }}mo target
+            </div>
+            <div class="text-muted" style="font-size:0.7rem;">
+              {% if eq_months >= record.target_55gal_months %}
+              ✓ reached
+              {% else %}
+              ~{{ ((record.target_55gal_months - eq_months) * 30 / barrel_mult) | round | int }}d left
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% elif record.target_days %}
+        <div class="col-6 col-md-3">
+          <div class="border rounded py-1 {% if days_in >= record.target_days %}border-success{% endif %}">
+            <div class="fw-bold {% if days_in >= record.target_days %}text-success{% endif %}">
+              {{ record.target_days }}d target
+            </div>
+            <div class="text-muted" style="font-size:0.7rem;">
+              {% if days_in >= record.target_days %}✓ reached
+              {% else %}{{ record.target_days - days_in }}d left{% endif %}
+            </div>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+
       <!-- Tasting entries for this record -->
       {% if record.entries %}
       <div class="table-responsive mb-2">
@@ -348,6 +403,7 @@
               <th>Date</th>
               <th class="text-end">Gravity</th>
               <th class="text-end">ABV</th>
+              <th class="text-center">Color</th>
               <th>Flavor Notes</th>
               <th>Notes</th>
               <th></th>
@@ -359,6 +415,14 @@
               <td>{{ entry.recorded_at.strftime('%Y-%m-%d') }}</td>
               <td class="text-end">{{ "%.3f"|format(entry.gravity) if entry.gravity else '—' }}</td>
               <td class="text-end">{{ "%.1f"|format(entry.abv) + '%' if entry.abv else '—' }}</td>
+              <td class="text-center">
+                {% if entry.color_srm %}
+                <span class="d-inline-flex align-items-center gap-1">
+                  <span style="width:14px;height:14px;border-radius:3px;background:{{ entry.color_srm | srm_hex }};border:1px solid rgba(0,0,0,.2);display:inline-block;"></span>
+                  <small>{{ entry.color_srm | round(1) }}</small>
+                </span>
+                {% else %}—{% endif %}
+              </td>
               <td><small>{{ entry.flavor_notes or '—' }}</small></td>
               <td><small class="text-muted">{{ entry.notes or '—' }}</small></td>
               <td class="text-end">
@@ -395,12 +459,20 @@
             <input type="number" name="abv" class="form-control form-control-sm"
                    step="0.1" placeholder="8.5">
           </div>
+          <div class="col-md-1">
+            <label class="form-label form-label-sm">
+              Color
+              <span class="text-muted" data-bs-toggle="tooltip" title="SRM scale: 1=pale straw, 10=amber, 20=brown, 40+=black">SRM</span>
+            </label>
+            <input type="number" name="color_srm" class="form-control form-control-sm"
+                   step="0.5" min="0" max="80" placeholder="—">
+          </div>
           <div class="col-md-3">
             <label class="form-label form-label-sm">Flavor Notes</label>
             <input type="text" name="flavor_notes" class="form-control form-control-sm"
                    placeholder="vanilla, oak, caramel…">
           </div>
-          <div class="col-md-3">
+          <div class="col-md-2">
             <label class="form-label form-label-sm">Notes</label>
             <input type="text" name="notes" class="form-control form-control-sm"
                    placeholder="Optional">
@@ -424,7 +496,7 @@
 
 <!-- Start Aging Modal -->
 <div class="modal fade" id="startAgingModal" tabindex="-1">
-  <div class="modal-dialog">
+  <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <form method="post" action="/brew-sessions/{{ session.id }}/barrel-aging/start">
         <div class="modal-header">
@@ -434,29 +506,72 @@
         <div class="modal-body">
           <div class="mb-3">
             <label class="form-label">Barrel <span class="text-danger">*</span></label>
-            <select name="barrel_id" class="form-select" required>
+            <select name="barrel_id" id="aging-barrel-select" class="form-select" required
+                    onchange="agingBarrelChanged()">
               <option value="">— Select a barrel —</option>
               {% for b in barrels %}
-              <option value="{{ b.id }}">{{ b.name }} ({{ b.size_l }}L{% if b.wood_type %} · {{ b.wood_type }}{% endif %}{% if b.previous_contents %} · {{ b.previous_contents }}{% endif %})</option>
+              <option value="{{ b.id }}"
+                      data-mult="{{ b.aging_multiplier or '' }}"
+                      data-sav="{{ b.effective_sav or '' }}"
+                      data-size="{{ b.size_l }}">
+                {{ b.name }}
+                ({{ b.size_l }}L{% if b.wood_type %} · {{ b.wood_type }}{% endif %}{% if b.previous_contents %} · {{ b.previous_contents }}{% endif %}{% if b.aging_multiplier %} · {{ b.aging_multiplier }}×{% endif %})
+              </option>
               {% endfor %}
             </select>
-            <div class="form-text">
-              <a href="/barrels" target="_blank">Manage barrels</a>
+            <div class="form-text"><a href="/barrels" target="_blank">Manage barrels ↗</a></div>
+          </div>
+
+          <!-- Barrel stats strip (shown after selection) -->
+          <div id="aging-barrel-info" class="alert alert-info py-2 px-3 small mb-3" style="display:none;">
+            <div class="row g-2 text-center">
+              <div class="col-4">
+                <div class="fw-bold" id="aging-info-mult">—</div>
+                <div class="text-muted">× aging rate</div>
+              </div>
+              <div class="col-4">
+                <div class="fw-bold" id="aging-info-sav">—</div>
+                <div class="text-muted">cm²/L SA:V</div>
+              </div>
+              <div class="col-4">
+                <div class="fw-bold" id="aging-info-size">—</div>
+                <div class="text-muted">L volume</div>
+              </div>
             </div>
           </div>
-          <div class="row g-3">
-            <div class="col-md-6">
-              <label class="form-label">Start Date</label>
-              <input type="date" name="start_date" class="form-control"
-                     value="{{ now_iso[:10] }}">
-            </div>
-            <div class="col-md-6">
-              <label class="form-label">Target Days</label>
-              <input type="number" name="target_days" class="form-control"
-                     min="1" placeholder="e.g. 90">
+
+          <!-- Aging planner -->
+          <div class="card border-warning-subtle bg-warning-subtle mb-3">
+            <div class="card-body py-2 px-3">
+              <p class="small fw-semibold mb-2"><i class="bi bi-calendar-check me-1"></i>Aging Planner</p>
+              <div class="row g-2 align-items-end">
+                <div class="col-md-4">
+                  <label class="form-label small mb-1">Target 53-gal equivalent (months)</label>
+                  <input type="number" name="target_55gal_months" id="aging-target-months"
+                         class="form-control form-control-sm" step="0.5" min="0.5" placeholder="e.g. 24"
+                         oninput="agingRecalc()">
+                  <div class="form-text" style="font-size:0.7rem;">e.g. 24 = character of 2yr in a 53-gal barrel</div>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label small mb-1">Start Date</label>
+                  <input type="date" name="start_date" id="aging-start-date" class="form-control form-control-sm"
+                         value="{{ now_iso[:10] }}" oninput="agingRecalc()">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label small mb-1">Target Days (actual)</label>
+                  <input type="number" name="target_days" id="aging-target-days"
+                         class="form-control form-control-sm" step="1" min="1" placeholder="auto">
+                </div>
+              </div>
+              <div id="aging-plan-result" class="mt-2 small text-muted" style="display:none;">
+                <i class="bi bi-calendar-event me-1"></i>
+                Projected ready: <strong id="aging-plan-date">—</strong>
+                (<span id="aging-plan-days">—</span> days at <span id="aging-plan-mult">—</span>× rate)
+              </div>
             </div>
           </div>
-          <div class="mt-3">
+
+          <div class="mb-3">
             <label class="form-label">Notes</label>
             <textarea name="notes" class="form-control" rows="2"></textarea>
           </div>
@@ -473,6 +588,49 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+function agingBarrelChanged() {
+  const sel = document.getElementById('aging-barrel-select');
+  const opt = sel.options[sel.selectedIndex];
+  const info = document.getElementById('aging-barrel-info');
+  if (!opt.value) { info.style.display = 'none'; return; }
+  const mult = opt.dataset.mult;
+  const sav  = opt.dataset.sav;
+  const size = opt.dataset.size;
+  document.getElementById('aging-info-mult').textContent = mult ? mult + '×' : '—';
+  document.getElementById('aging-info-sav').textContent  = sav  ? sav  + ' cm²/L' : '—';
+  document.getElementById('aging-info-size').textContent = size ? parseFloat(size).toFixed(1) + ' L' : '—';
+  info.style.display = '';
+  agingRecalc();
+}
+
+function agingRecalc() {
+  const sel    = document.getElementById('aging-barrel-select');
+  const opt    = sel.options[sel.selectedIndex];
+  const mult   = parseFloat(opt?.dataset?.mult) || 0;
+  const months = parseFloat(document.getElementById('aging-target-months').value) || 0;
+  const start  = document.getElementById('aging-start-date').value;
+  const result = document.getElementById('aging-plan-result');
+
+  if (!mult || !months || !start) {
+    result.style.display = 'none';
+    return;
+  }
+
+  const days = Math.round(months * 30 / mult);
+  document.getElementById('aging-target-days').value = days;
+
+  const endDate = new Date(start);
+  endDate.setDate(endDate.getDate() + days);
+  const endStr = endDate.toISOString().split('T')[0];
+
+  document.getElementById('aging-plan-date').textContent = endStr;
+  document.getElementById('aging-plan-days').textContent = days;
+  document.getElementById('aging-plan-mult').textContent = mult;
+  result.style.display = '';
+}
+</script>
+
 {% if session.fermentation_readings %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>

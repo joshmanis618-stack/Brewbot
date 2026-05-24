@@ -29,8 +29,30 @@ from app.services import beerxml as beerxml_service
 from app.services import calc as calc_service
 from app.services import auth as auth_service
 
+from app.utils.units import register as _register_units, parse_vol, parse_temp, parse_area
+
 TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+_register_units(templates.env)
+
+# SRM color scale (1–40+) for barrel aging entry swatches
+_SRM_HEX = [
+    "#FFE699","#FFD878","#FFCA5A","#FFBF42","#FBB123",
+    "#F8A600","#F39C00","#EA8F00","#E58500","#DE7C00",
+    "#D77200","#CF6900","#CB6100","#C35900","#BB5100",
+    "#B54C00","#B04500","#A63E00","#A13700","#9B3200",
+    "#952D00","#8E2900","#882300","#821E00","#7B1A00",
+    "#771900","#701400","#6A0F00","#640B00","#5E0800",
+    "#580600","#520500","#4C0400","#470300","#420200",
+    "#3D0200","#370100","#340100","#2E0100","#1A0000",
+]
+def _srm_hex(srm):
+    if srm is None:
+        return "#cccccc"
+    idx = max(0, min(int(round(srm)) - 1, len(_SRM_HEX) - 1))
+    return _SRM_HEX[idx]
+
+templates.env.filters["srm_hex"] = _srm_hex
 
 _public_router = APIRouter(include_in_schema=False)
 
@@ -152,6 +174,16 @@ async def set_craft(request: Request):
     craft = form.get("craft", "beer")
     if craft in ("beer", "wine", "spirits"):
         request.session["craft"] = craft
+    ref = request.headers.get("referer", "/")
+    return RedirectResponse(ref, status_code=303)
+
+
+@router.post("/set-units")
+async def set_units(request: Request):
+    form = await request.form()
+    units = form.get("units", "metric")
+    if units in ("metric", "imperial"):
+        request.session["units"] = units
     ref = request.headers.get("referer", "/")
     return RedirectResponse(ref, status_code=303)
 
@@ -1373,13 +1405,15 @@ def brew_session_detail(session_id: int, request: Request, db: Session = Depends
         }
         for r in session.fermentation_readings
     ]
-    now_iso = datetime.utcnow().strftime("%Y-%m-%dT%H:%M")
+    now_dt = datetime.utcnow()
+    now_iso = now_dt.strftime("%Y-%m-%dT%H:%M")
     barrels = db.query(Barrel).filter(Barrel.is_active == True).order_by(Barrel.name).all()
 
     return templates.TemplateResponse(request, "brew_sessions/detail.html", {
         "session": session,
         "readings_json": json.dumps(readings_data),
         "now_iso": now_iso,
+        "now_dt": now_dt,
         "barrels": barrels,
         "page": "brew_sessions",
     })
@@ -1436,8 +1470,22 @@ PREVIOUS_CONTENTS = ["New/Virgin", "Bourbon", "Rye Whiskey", "Red Wine", "White 
 @router.get("/barrels", response_class=HTMLResponse)
 def barrels_page(request: Request, db: Session = Depends(get_db)):
     barrels = db.query(Barrel).order_by(Barrel.name).all()
+    active_records = (
+        db.query(BarrelAgingRecord)
+        .filter(BarrelAgingRecord.end_date.is_(None))
+        .options(
+            selectinload(BarrelAgingRecord.session).selectinload(BrewSession.recipe),
+            selectinload(BarrelAgingRecord.entries),
+        )
+        .all()
+    )
+    active_by_barrel = {}
+    for rec in active_records:
+        active_by_barrel.setdefault(rec.barrel_id, []).append(rec)
     return templates.TemplateResponse(request, "barrels/list.html", {
         "barrels": barrels,
+        "active_by_barrel": active_by_barrel,
+        "now_dt": datetime.utcnow(),
         "wood_types": WOOD_TYPES,
         "char_levels": CHAR_LEVELS,
         "previous_contents": PREVIOUS_CONTENTS,
@@ -1448,16 +1496,17 @@ def barrels_page(request: Request, db: Session = Depends(get_db)):
 @router.post("/barrels/create")
 async def barrel_create(request: Request, db: Session = Depends(get_db)):
     form = await request.form()
+    u = request.session.get("units", "metric")
     db.add(Barrel(
         name=form["name"],
         barrel_style=form.get("barrel_style") or "traditional",
-        size_l=float(form["size_l"]),
+        size_l=parse_vol(form.get("size_l"), u),
         wood_type=form.get("wood_type") or None,
         char_level=form.get("char_level") or None,
         previous_contents=form.get("previous_contents") or None,
         age_months=int(form["age_months"]) if form.get("age_months") else None,
-        wood_contact_area_cm2=float(form["wood_contact_area_cm2"]) if form.get("wood_contact_area_cm2") else None,
-        storage_temp_c=float(form["storage_temp_c"]) if form.get("storage_temp_c") else None,
+        wood_contact_area_cm2=parse_area(form.get("wood_contact_area_cm2"), u),
+        storage_temp_c=parse_temp(form.get("storage_temp_c"), u),
         notes=form.get("notes") or None,
     ))
     db.commit()
@@ -1470,15 +1519,16 @@ async def barrel_update(barrel_id: int, request: Request, db: Session = Depends(
     if not barrel:
         return RedirectResponse("/barrels", status_code=303)
     form = await request.form()
+    u = request.session.get("units", "metric")
     barrel.name = form["name"]
     barrel.barrel_style = form.get("barrel_style") or "traditional"
-    barrel.size_l = float(form["size_l"])
+    barrel.size_l = parse_vol(form.get("size_l"), u)
     barrel.wood_type = form.get("wood_type") or None
     barrel.char_level = form.get("char_level") or None
     barrel.previous_contents = form.get("previous_contents") or None
     barrel.age_months = int(form["age_months"]) if form.get("age_months") else None
-    barrel.wood_contact_area_cm2 = float(form["wood_contact_area_cm2"]) if form.get("wood_contact_area_cm2") else None
-    barrel.storage_temp_c = float(form["storage_temp_c"]) if form.get("storage_temp_c") else None
+    barrel.wood_contact_area_cm2 = parse_area(form.get("wood_contact_area_cm2"), u)
+    barrel.storage_temp_c = parse_temp(form.get("storage_temp_c"), u)
     barrel.notes = form.get("notes") or None
     db.commit()
     return RedirectResponse("/barrels", status_code=303)
@@ -1512,6 +1562,7 @@ async def barrel_aging_start(session_id: int, request: Request, db: Session = De
         session_id=session_id,
         start_date=start_date,
         target_days=int(form["target_days"]) if form.get("target_days") else None,
+        target_55gal_months=float(form["target_55gal_months"]) if form.get("target_55gal_months") else None,
         notes=form.get("notes") or None,
     ))
     db.commit()
@@ -1551,6 +1602,7 @@ async def barrel_aging_entry_create(session_id: int, record_id: int, request: Re
         recorded_at=recorded_at,
         gravity=float(form["gravity"]) if form.get("gravity") else None,
         abv=float(form["abv"]) if form.get("abv") else None,
+        color_srm=float(form["color_srm"]) if form.get("color_srm") else None,
         flavor_notes=form.get("flavor_notes") or None,
         notes=form.get("notes") or None,
     ))
