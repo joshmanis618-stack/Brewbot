@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}Barrel Registry — Brewbot{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+  <h1><i class="bi bi-archive me-2"></i>Barrel Registry</h1>
+  <button class="btn btn-brew" data-bs-toggle="modal" data-bs-target="#addBarrelModal">
+    <i class="bi bi-plus-lg me-1"></i>Add Barrel
+  </button>
+</div>
+
+{% if barrels %}
+<div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>Name</th>
+        <th>Size (L)</th>
+        <th>Wood Type</th>
+        <th>Char / Toast</th>
+        <th>Previous Contents</th>
+        <th>Age (mo.)</th>
+        <th>Notes</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for b in barrels %}
+      <tr>
+        <td class="fw-semibold">{{ b.name }}</td>
+        <td>{{ b.size_l }}</td>
+        <td>{{ b.wood_type or '—' }}</td>
+        <td>{{ b.char_level or '—' }}</td>
+        <td>{{ b.previous_contents or '—' }}</td>
+        <td>{{ b.age_months or '—' }}</td>
+        <td class="text-muted small">{{ b.notes or '—' }}</td>
+        <td class="text-end">
+          <button class="btn btn-sm btn-outline-secondary me-1"
+                  data-bs-toggle="modal" data-bs-target="#editBarrelModal{{ b.id }}">
+            <i class="bi bi-pencil"></i>
+          </button>
+          <form method="post" action="/barrels/{{ b.id }}/delete" class="d-inline"
+                onsubmit="return confirm('Delete barrel {{ b.name }}?')">
+            <button type="submit" class="btn btn-sm btn-outline-danger">
+              <i class="bi bi-trash"></i>
+            </button>
+          </form>
+        </td>
+      </tr>
+
+      <!-- Edit modal for each barrel -->
+      <div class="modal fade" id="editBarrelModal{{ b.id }}" tabindex="-1">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <form method="post" action="/barrels/{{ b.id }}/update">
+              <div class="modal-header">
+                <h5 class="modal-title">Edit Barrel</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+              </div>
+              <div class="modal-body">
+                {% include "barrels/_form_fields.html" with context %}
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-brew">Save</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <i class="bi bi-archive text-muted"></i>
+    <p class="fw-semibold mb-1">No barrels yet</p>
+    <p class="small text-muted mb-3">Add barrels to your registry to track barrel aging across sessions.</p>
+    <button class="btn btn-brew btn-sm" data-bs-toggle="modal" data-bs-target="#addBarrelModal">
+      Add Your First Barrel
+    </button>
+  </div>
+</div>
+{% endif %}
+
+<!-- Add Barrel Modal -->
+<div class="modal fade" id="addBarrelModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="/barrels/create">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-archive me-2"></i>Add Barrel</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Name <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" required placeholder="e.g. Bourbon Barrel #1">
+          </div>
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label">Size (L) <span class="text-danger">*</span></label>
+              <input type="number" name="size_l" class="form-control" step="0.1" min="1" required placeholder="200">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Age (months)</label>
+              <input type="number" name="age_months" class="form-control" min="0" placeholder="0 = new">
+            </div>
+          </div>
+          <div class="row g-3 mb-3">
+            <div class="col-md-4">
+              <label class="form-label">Wood Type</label>
+              <select name="wood_type" class="form-select">
+                <option value="">— None —</option>
+                {% for w in wood_types %}
+                <option>{{ w }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Char / Toast</label>
+              <select name="char_level" class="form-select">
+                <option value="">— None —</option>
+                {% for c in char_levels %}
+                <option>{{ c }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Previous Contents</label>
+              <select name="previous_contents" class="form-select">
+                <option value="">— None —</option>
+                {% for p in previous_contents %}
+                <option>{{ p }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Notes</label>
+            <textarea name="notes" class="form-control" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-brew">Add Barrel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block page_help %}
+<h6>Barrel Registry</h6>
+<p>Track all your barrels in one place. Each barrel record stores the wood type, char level, previous contents, and age — all of which influence the flavor compounds it contributes.</p>
+<h6>Attaching to a Session</h6>
+<p>Go to a Brew Session detail page and use the Barrel Aging section to start aging a batch in a specific barrel. You can log tasting entries throughout the aging period.</p>
+<h6>Wood Types</h6>
+<ul class="small">
+  <li><strong>American Oak</strong> — vanilla, coconut, caramel</li>
+  <li><strong>French Oak</strong> — spice, toast, subtle tannins</li>
+  <li><strong>Hungarian Oak</strong> — bold tannins, dark fruit</li>
+  <li><strong>Cherry</strong> — fruity, light tannins</li>
+</ul>
+{% endblock %}

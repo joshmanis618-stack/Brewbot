@@ -197,7 +197,7 @@
   </div>
   <div class="card-body">
     <form method="post" action="/brew-sessions/{{ session.id }}/readings">
-      <div class="row g-3">
+      <div class="row g-3 mb-2">
         <div class="col-md-3">
           <label class="form-label">Date &amp; Time</label>
           <input type="datetime-local" name="recorded_at" class="form-control"
@@ -206,14 +206,36 @@
         <div class="col-md-2">
           <label class="form-label">Gravity (SG)</label>
           <input type="number" name="gravity" class="form-control"
-                 step="0.001" min="0.990" max="1.200" placeholder="e.g. 1.050">
+                 step="0.001" min="0.990" max="1.200" placeholder="1.050">
         </div>
         <div class="col-md-2">
           <label class="form-label">Temperature (°C)</label>
           <input type="number" name="temperature_c" class="form-control"
-                 step="0.1" placeholder="e.g. 20.0">
+                 step="0.1" placeholder="20.0">
         </div>
-        <div class="col-md-4">
+        <div class="col-md-2">
+          <label class="form-label">pH</label>
+          <input type="number" name="ph" class="form-control"
+                 step="0.01" min="2" max="5" placeholder="3.4">
+        </div>
+        <div class="col-md-1">
+          <label class="form-label">TA (g/L)</label>
+          <input type="number" name="ta" class="form-control"
+                 step="0.1" min="0" placeholder="6.0">
+        </div>
+        <div class="col-md-1">
+          <label class="form-label">Free SO₂</label>
+          <input type="number" name="so2_free" class="form-control"
+                 step="1" min="0" placeholder="ppm">
+        </div>
+        <div class="col-md-1">
+          <label class="form-label">Total SO₂</label>
+          <input type="number" name="so2_total" class="form-control"
+                 step="1" min="0" placeholder="ppm">
+        </div>
+      </div>
+      <div class="row g-3">
+        <div class="col-md-11">
           <label class="form-label">Notes</label>
           <input type="text" name="notes" class="form-control" placeholder="Optional note" maxlength="200">
         </div>
@@ -227,7 +249,7 @@
 
 <!-- Readings Table -->
 {% if session.fermentation_readings %}
-<div class="card">
+<div class="card mb-4">
   <div class="card-header fw-semibold">
     <i class="bi bi-table me-1"></i>Readings
   </div>
@@ -236,8 +258,12 @@
       <thead class="table-light">
         <tr>
           <th>Date / Time</th>
-          <th class="text-end">Gravity (SG)</th>
+          <th class="text-end">Gravity</th>
           <th class="text-end">Temp (°C)</th>
+          <th class="text-end">pH</th>
+          <th class="text-end">TA (g/L)</th>
+          <th class="text-end">Free SO₂</th>
+          <th class="text-end">Total SO₂</th>
           <th>Notes</th>
           <th></th>
         </tr>
@@ -248,6 +274,10 @@
           <td>{{ r.recorded_at.strftime('%Y-%m-%d %H:%M') }}</td>
           <td class="text-end">{{ "%.3f"|format(r.gravity) if r.gravity else '—' }}</td>
           <td class="text-end">{{ "%.1f"|format(r.temperature_c) if r.temperature_c else '—' }}</td>
+          <td class="text-end">{{ "%.2f"|format(r.ph) if r.ph else '—' }}</td>
+          <td class="text-end">{{ "%.1f"|format(r.ta) if r.ta else '—' }}</td>
+          <td class="text-end">{{ r.so2_free|int if r.so2_free else '—' }}</td>
+          <td class="text-end">{{ r.so2_total|int if r.so2_total else '—' }}</td>
           <td><small class="text-muted">{{ r.notes or '—' }}</small></td>
           <td class="text-end">
             <form method="post"
@@ -266,6 +296,179 @@
   </div>
 </div>
 {% endif %}
+
+<!-- Barrel Aging -->
+<div class="card mb-4">
+  <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-archive me-1"></i>Barrel Aging</span>
+    <button class="btn btn-sm btn-brew" data-bs-toggle="modal" data-bs-target="#startAgingModal">
+      <i class="bi bi-plus-lg me-1"></i>Start Aging
+    </button>
+  </div>
+  {% if session.barrel_aging_records %}
+  <div class="card-body p-0">
+    {% for record in session.barrel_aging_records %}
+    <div class="border-bottom p-3">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <div>
+          <strong>{{ record.barrel.name }}</strong>
+          <span class="text-muted ms-2 small">
+            {{ record.barrel.wood_type or '' }}{% if record.barrel.previous_contents %} · {{ record.barrel.previous_contents }}{% endif %}
+          </span>
+          <br>
+          <small class="text-muted">
+            Started {{ record.start_date.strftime('%Y-%m-%d') }}
+            {% if record.end_date %} · Ended {{ record.end_date.strftime('%Y-%m-%d') }}
+            {% elif record.target_days %} · Target {{ record.target_days }} days
+            {% endif %}
+          </small>
+        </div>
+        <div class="d-flex gap-2">
+          {% if not record.end_date %}
+          <form method="post" action="/brew-sessions/{{ session.id }}/barrel-aging/{{ record.id }}/end">
+            <input type="hidden" name="end_date" value="{{ now_iso[:10] }}">
+            <button type="submit" class="btn btn-sm btn-outline-secondary">
+              <i class="bi bi-check2 me-1"></i>End Aging
+            </button>
+          </form>
+          {% endif %}
+          <form method="post" action="/brew-sessions/{{ session.id }}/barrel-aging/{{ record.id }}/delete"
+                onsubmit="return confirm('Remove this barrel aging record?')">
+            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Tasting entries for this record -->
+      {% if record.entries %}
+      <div class="table-responsive mb-2">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Date</th>
+              <th class="text-end">Gravity</th>
+              <th class="text-end">ABV</th>
+              <th>Flavor Notes</th>
+              <th>Notes</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for entry in record.entries %}
+            <tr>
+              <td>{{ entry.recorded_at.strftime('%Y-%m-%d') }}</td>
+              <td class="text-end">{{ "%.3f"|format(entry.gravity) if entry.gravity else '—' }}</td>
+              <td class="text-end">{{ "%.1f"|format(entry.abv) + '%' if entry.abv else '—' }}</td>
+              <td><small>{{ entry.flavor_notes or '—' }}</small></td>
+              <td><small class="text-muted">{{ entry.notes or '—' }}</small></td>
+              <td class="text-end">
+                <form method="post"
+                      action="/brew-sessions/{{ session.id }}/barrel-aging/{{ record.id }}/entries/{{ entry.id }}/delete"
+                      class="d-inline" onsubmit="return confirm('Delete entry?')">
+                  <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+
+      <!-- Add entry form -->
+      {% if not record.end_date %}
+      <form method="post" action="/brew-sessions/{{ session.id }}/barrel-aging/{{ record.id }}/entries"
+            class="mt-2">
+        <div class="row g-2 align-items-end">
+          <div class="col-md-2">
+            <label class="form-label form-label-sm">Date</label>
+            <input type="datetime-local" name="recorded_at" class="form-control form-control-sm"
+                   value="{{ now_iso }}">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label form-label-sm">Gravity</label>
+            <input type="number" name="gravity" class="form-control form-control-sm"
+                   step="0.001" placeholder="1.020">
+          </div>
+          <div class="col-md-1">
+            <label class="form-label form-label-sm">ABV (%)</label>
+            <input type="number" name="abv" class="form-control form-control-sm"
+                   step="0.1" placeholder="8.5">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label form-label-sm">Flavor Notes</label>
+            <input type="text" name="flavor_notes" class="form-control form-control-sm"
+                   placeholder="vanilla, oak, caramel…">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label form-label-sm">Notes</label>
+            <input type="text" name="notes" class="form-control form-control-sm"
+                   placeholder="Optional">
+          </div>
+          <div class="col-md-1">
+            <button type="submit" class="btn btn-sm btn-brew w-100">Log</button>
+          </div>
+        </div>
+      </form>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card-body text-center text-muted py-4">
+    <i class="bi bi-archive fs-2 d-block mb-2"></i>
+    No barrel aging records yet. Click <strong>Start Aging</strong> to move this batch into a barrel.
+  </div>
+  {% endif %}
+</div>
+
+<!-- Start Aging Modal -->
+<div class="modal fade" id="startAgingModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="/brew-sessions/{{ session.id }}/barrel-aging/start">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-archive me-2"></i>Start Barrel Aging</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Barrel <span class="text-danger">*</span></label>
+            <select name="barrel_id" class="form-select" required>
+              <option value="">— Select a barrel —</option>
+              {% for b in barrels %}
+              <option value="{{ b.id }}">{{ b.name }} ({{ b.size_l }}L{% if b.wood_type %} · {{ b.wood_type }}{% endif %}{% if b.previous_contents %} · {{ b.previous_contents }}{% endif %})</option>
+              {% endfor %}
+            </select>
+            <div class="form-text">
+              <a href="/barrels" target="_blank">Manage barrels</a>
+            </div>
+          </div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Start Date</label>
+              <input type="date" name="start_date" class="form-control"
+                     value="{{ now_iso[:10] }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Target Days</label>
+              <input type="number" name="target_days" class="form-control"
+                     min="1" placeholder="e.g. 90">
+            </div>
+          </div>
+          <div class="mt-3">
+            <label class="form-label">Notes</label>
+            <textarea name="notes" class="form-control" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-brew">Start Aging</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
 {% endblock %}
 

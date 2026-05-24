@@ -10,8 +10,12 @@ class FermentationReading(Base):
     id = Column(Integer, primary_key=True)
     session_id = Column(Integer, ForeignKey("brew_sessions.id"), nullable=False)
     recorded_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    gravity = Column(Float, nullable=True)          # SG e.g. 1.020
-    temperature_c = Column(Float, nullable=True)    # Celsius
+    gravity = Column(Float, nullable=True)           # SG e.g. 1.020
+    temperature_c = Column(Float, nullable=True)     # Celsius
+    ph = Column(Float, nullable=True)                # pH (wine / spirits)
+    ta = Column(Float, nullable=True)                # titratable acidity g/L
+    so2_free = Column(Float, nullable=True)          # free SO2 ppm
+    so2_total = Column(Float, nullable=True)         # total SO2 ppm
     notes = Column(String(200), nullable=True)
 
     session = relationship("BrewSession", back_populates="fermentation_readings")

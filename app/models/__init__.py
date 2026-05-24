@@ -11,6 +11,8 @@ from .brew_session import BrewSession
 from .device import RigProfile, Device, DeviceReading
 from .brew_program import BrewProgram, BrewStep, BrewStepCommand, BrewSessionStep
 from .fermentation_reading import FermentationReading
+from .barrel import Barrel, BarrelAgingRecord, BarrelAgingEntry
+from .grape_variety import GrapeVariety, RecipeGrape
 
 __all__ = [
     "Base",
@@ -35,4 +37,9 @@ __all__ = [
     "BrewSessionStep",
     "User",
     "FermentationReading",
+    "Barrel",
+    "BarrelAgingRecord",
+    "BarrelAgingEntry",
+    "GrapeVariety",
+    "RecipeGrape",
 ]

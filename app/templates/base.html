@@ -13,9 +13,45 @@
 
 <nav class="navbar navbar-expand-lg navbar-dark navbar-brewbot sticky-top shadow-sm">
   <div class="container-fluid px-4">
+    {% set current_craft = request.session.get('craft', 'beer') %}
     <a class="navbar-brand fw-bold" href="/">
-      <i class="bi bi-thermometer-half me-1"></i>Brewbot
+      {% if current_craft == 'wine' %}<i class="bi bi-tree me-1"></i>Winebot
+      {% elif current_craft == 'spirits' %}<i class="bi bi-fire me-1"></i>Spiritbot
+      {% else %}<i class="bi bi-thermometer-half me-1"></i>Brewbot{% endif %}
     </a>
+    <div class="dropdown me-2">
+      <button class="btn btn-sm btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+        {% if current_craft == 'wine' %}🍷 Wine
+        {% elif current_craft == 'spirits' %}🥃 Spirits
+        {% else %}🍺 Beer{% endif %}
+      </button>
+      <ul class="dropdown-menu dropdown-menu-dark">
+        <li>
+          <form method="post" action="/set-craft" class="mb-0">
+            <input type="hidden" name="craft" value="beer">
+            <button type="submit" class="dropdown-item {% if current_craft == 'beer' %}active{% endif %}">
+              🍺 Beer
+            </button>
+          </form>
+        </li>
+        <li>
+          <form method="post" action="/set-craft" class="mb-0">
+            <input type="hidden" name="craft" value="wine">
+            <button type="submit" class="dropdown-item {% if current_craft == 'wine' %}active{% endif %}">
+              🍷 Wine
+            </button>
+          </form>
+        </li>
+        <li>
+          <form method="post" action="/set-craft" class="mb-0">
+            <input type="hidden" name="craft" value="spirits">
+            <button type="submit" class="dropdown-item {% if current_craft == 'spirits' %}active{% endif %}">
+              🥃 Spirits
+            </button>
+          </form>
+        </li>
+      </ul>
+    </div>
     <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navMain">
       <span class="navbar-toggler-icon"></span>
     </button>
@@ -59,6 +95,11 @@
         <li class="nav-item">
           <a class="nav-link rounded px-3 {% if page == 'brew_programs' %}active{% endif %}" href="/brew-programs">
             <i class="bi bi-list-ol me-1"></i>Brew Programs
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link rounded px-3 {% if page == 'barrels' %}active{% endif %}" href="/barrels">
+            <i class="bi bi-archive me-1"></i>Barrels
           </a>
         </li>
         <li class="nav-item">

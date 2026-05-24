@@ -20,6 +20,8 @@ from app.models.recipe import Recipe, RecipeFermentable, RecipeHop, RecipeMisc, 
 from app.models.style import Style
 from app.models.yeast import Yeast
 from app.models.user import User
+from app.models.barrel import Barrel, BarrelAgingRecord, BarrelAgingEntry
+from app.models.grape_variety import GrapeVariety, RecipeGrape
 import json
 from app.services import backup as backup_service
 from app.services import beerxml as beerxml_service
@@ -137,7 +139,20 @@ def _form_context(db: Session) -> dict:
         "all_hops": db.query(Hop).order_by(Hop.name).all(),
         "all_yeasts": db.query(Yeast).order_by(Yeast.name).all(),
         "all_miscs": db.query(Misc).order_by(Misc.name).all(),
+        "all_grapes": db.query(GrapeVariety).order_by(GrapeVariety.name).all(),
     }
+
+
+# ── Craft switcher ────────────────────────────────────────────────────────────
+
+@_public_router.post("/set-craft")
+async def set_craft(request: Request):
+    form = await request.form()
+    craft = form.get("craft", "beer")
+    if craft in ("beer", "wine", "spirits"):
+        request.session["craft"] = craft
+    ref = request.headers.get("referer", "/")
+    return RedirectResponse(ref, status_code=303)
 
 
 def _parse_ingredients(form):
@@ -242,10 +257,32 @@ def recipe_detail(recipe_id: int, request: Request, db: Session = Depends(get_db
     })
 
 
+def _parse_grapes(form):
+    grapes = []
+    i = 0
+    while form.get(f"grape_id_{i}"):
+        grapes.append({
+            "grape_id": int(form[f"grape_id_{i}"]),
+            "amount_kg": float(form.get(f"grape_amount_kg_{i}", 0)),
+            "percentage": float(form[f"grape_pct_{i}"]) if form.get(f"grape_pct_{i}") else None,
+        })
+        i += 1
+    return grapes
+
+
+def _apply_wine_fields(recipe, form):
+    recipe.craft = form.get("craft", "beer")
+    recipe.wine_style = form.get("wine_style") or None
+    recipe.skin_contact_days = int(form["skin_contact_days"]) if form.get("skin_contact_days") else None
+    recipe.target_ta = float(form["target_ta"]) if form.get("target_ta") else None
+    recipe.target_ph = float(form["target_ph"]) if form.get("target_ph") else None
+
+
 @router.post("/recipes", response_class=HTMLResponse)
 async def recipe_create(request: Request, db: Session = Depends(get_db)):
     form = await request.form()
     fermentables, hops, yeasts, miscs = _parse_ingredients(form)
+    grapes = _parse_grapes(form)
     recipe = Recipe(
         name=form["name"],
         type=form.get("type", "All Grain"),
@@ -258,6 +295,7 @@ async def recipe_create(request: Request, db: Session = Depends(get_db)):
         notes=form.get("notes") or None,
         brewer=form.get("brewer") or None,
     )
+    _apply_wine_fields(recipe, form)
     db.add(recipe)
     db.flush()
     for f in fermentables:
@@ -268,6 +306,8 @@ async def recipe_create(request: Request, db: Session = Depends(get_db)):
         db.add(RecipeYeast(recipe_id=recipe.id, **y))
     for m in miscs:
         db.add(RecipeMisc(recipe_id=recipe.id, **m))
+    for g in grapes:
+        db.add(RecipeGrape(recipe_id=recipe.id, **g))
     db.flush()
     db.refresh(recipe)
     calc_service.calculate(recipe)
@@ -293,7 +333,9 @@ async def recipe_update(recipe_id: int, request: Request, db: Session = Depends(
     recipe.brewer = form.get("brewer") or None
 
     fermentables, hops, yeasts, miscs = _parse_ingredients(form)
-    for obj in recipe.fermentables[:] + recipe.hops[:] + recipe.yeasts[:] + recipe.miscs[:]:
+    grapes = _parse_grapes(form)
+    _apply_wine_fields(recipe, form)
+    for obj in recipe.fermentables[:] + recipe.hops[:] + recipe.yeasts[:] + recipe.miscs[:] + recipe.grapes[:]:
         db.delete(obj)
     db.flush()
     for f in fermentables:
@@ -304,6 +346,8 @@ async def recipe_update(recipe_id: int, request: Request, db: Session = Depends(
         db.add(RecipeYeast(recipe_id=recipe.id, **y))
     for m in miscs:
         db.add(RecipeMisc(recipe_id=recipe.id, **m))
+    for g in grapes:
+        db.add(RecipeGrape(recipe_id=recipe.id, **g))
     db.flush()
     db.refresh(recipe)
     calc_service.calculate(recipe)
@@ -453,6 +497,7 @@ def ingredients_list(request: Request, tab: str = "fermentables", db: Session = 
         "hops": db.query(Hop).order_by(Hop.name).all(),
         "yeasts": db.query(Yeast).order_by(Yeast.name).all(),
         "miscs": db.query(Misc).order_by(Misc.name).all(),
+        "grapes": db.query(GrapeVariety).order_by(GrapeVariety.name).all(),
         "tab": tab,
         "page": "ingredients",
         "error": request.query_params.get("error"),
@@ -1089,6 +1134,14 @@ def htmx_misc_row(index: int, request: Request, db: Session = Depends(get_db)):
     })
 
 
+@router.get("/htmx/row/grape", response_class=HTMLResponse)
+def htmx_grape_row(index: int, request: Request, db: Session = Depends(get_db)):
+    return templates.TemplateResponse(request, "partials/grape_row.html", {
+        "index": index,
+        "grapes": db.query(GrapeVariety).order_by(GrapeVariety.name).all(),
+    })
+
+
 # ── Unit / measurement converter ──────────────────────────────────────────────
 
 @router.get("/converter", response_class=HTMLResponse)
@@ -1269,6 +1322,8 @@ def brew_session_detail(session_id: int, request: Request, db: Session = Depends
     session = db.query(BrewSession).options(
         selectinload(BrewSession.recipe),
         selectinload(BrewSession.fermentation_readings),
+        selectinload(BrewSession.barrel_aging_records).selectinload(BarrelAgingRecord.barrel),
+        selectinload(BrewSession.barrel_aging_records).selectinload(BarrelAgingRecord.entries),
     ).filter(BrewSession.id == session_id).first()
     if not session:
         return RedirectResponse("/brew-sessions", status_code=303)
@@ -1282,11 +1337,13 @@ def brew_session_detail(session_id: int, request: Request, db: Session = Depends
         for r in session.fermentation_readings
     ]
     now_iso = datetime.utcnow().strftime("%Y-%m-%dT%H:%M")
+    barrels = db.query(Barrel).filter(Barrel.is_active == True).order_by(Barrel.name).all()
 
     return templates.TemplateResponse(request, "brew_sessions/detail.html", {
         "session": session,
         "readings_json": json.dumps(readings_data),
         "now_iso": now_iso,
+        "barrels": barrels,
         "page": "brew_sessions",
     })
 
@@ -1304,11 +1361,19 @@ async def brew_session_reading_create(session_id: int, request: Request, db: Ses
         recorded_at = datetime.utcnow()
     gravity_raw = form.get("gravity", "")
     temp_raw = form.get("temperature_c", "")
+    ph_raw = form.get("ph", "")
+    ta_raw = form.get("ta", "")
+    so2_free_raw = form.get("so2_free", "")
+    so2_total_raw = form.get("so2_total", "")
     db.add(FermentationReading(
         session_id=session_id,
         recorded_at=recorded_at,
         gravity=float(gravity_raw) if gravity_raw else None,
         temperature_c=float(temp_raw) if temp_raw else None,
+        ph=float(ph_raw) if ph_raw else None,
+        ta=float(ta_raw) if ta_raw else None,
+        so2_free=float(so2_free_raw) if so2_free_raw else None,
+        so2_total=float(so2_total_raw) if so2_total_raw else None,
         notes=form.get("notes") or None,
     ))
     db.commit()
@@ -1322,6 +1387,192 @@ def brew_session_reading_delete(session_id: int, reading_id: int, db: Session = 
         db.delete(reading)
         db.commit()
     return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+
+
+# ── Barrel registry ──────────────────────────────────────────────────────────
+
+WOOD_TYPES = ["American Oak", "French Oak", "Hungarian Oak", "Cherry", "Acacia", "Mulberry", "Chestnut"]
+CHAR_LEVELS = ["#1 Light", "#2 Medium", "#3 Heavy", "#4 Extra Heavy", "Light Toast", "Medium Toast", "Heavy Toast"]
+PREVIOUS_CONTENTS = ["New/Virgin", "Bourbon", "Rye Whiskey", "Red Wine", "White Wine", "Sherry", "Port", "Rum", "Tequila", "Brandy"]
+
+
+@router.get("/barrels", response_class=HTMLResponse)
+def barrels_page(request: Request, db: Session = Depends(get_db)):
+    barrels = db.query(Barrel).order_by(Barrel.name).all()
+    return templates.TemplateResponse(request, "barrels/list.html", {
+        "barrels": barrels,
+        "wood_types": WOOD_TYPES,
+        "char_levels": CHAR_LEVELS,
+        "previous_contents": PREVIOUS_CONTENTS,
+        "page": "barrels",
+    })
+
+
+@router.post("/barrels/create")
+async def barrel_create(request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    db.add(Barrel(
+        name=form["name"],
+        size_l=float(form["size_l"]),
+        wood_type=form.get("wood_type") or None,
+        char_level=form.get("char_level") or None,
+        previous_contents=form.get("previous_contents") or None,
+        age_months=int(form["age_months"]) if form.get("age_months") else None,
+        notes=form.get("notes") or None,
+    ))
+    db.commit()
+    return RedirectResponse("/barrels", status_code=303)
+
+
+@router.post("/barrels/{barrel_id}/update")
+async def barrel_update(barrel_id: int, request: Request, db: Session = Depends(get_db)):
+    barrel = db.get(Barrel, barrel_id)
+    if not barrel:
+        return RedirectResponse("/barrels", status_code=303)
+    form = await request.form()
+    barrel.name = form["name"]
+    barrel.size_l = float(form["size_l"])
+    barrel.wood_type = form.get("wood_type") or None
+    barrel.char_level = form.get("char_level") or None
+    barrel.previous_contents = form.get("previous_contents") or None
+    barrel.age_months = int(form["age_months"]) if form.get("age_months") else None
+    barrel.notes = form.get("notes") or None
+    db.commit()
+    return RedirectResponse("/barrels", status_code=303)
+
+
+@router.post("/barrels/{barrel_id}/delete")
+def barrel_delete(barrel_id: int, db: Session = Depends(get_db)):
+    barrel = db.get(Barrel, barrel_id)
+    if barrel:
+        db.delete(barrel)
+        db.commit()
+    return RedirectResponse("/barrels", status_code=303)
+
+
+# ── Barrel aging on sessions ──────────────────────────────────────────────────
+
+@router.post("/brew-sessions/{session_id}/barrel-aging/start")
+async def barrel_aging_start(session_id: int, request: Request, db: Session = Depends(get_db)):
+    session = db.get(BrewSession, session_id)
+    if not session:
+        return RedirectResponse("/brew-sessions", status_code=303)
+    form = await request.form()
+    start_date = datetime.utcnow()
+    if form.get("start_date"):
+        try:
+            start_date = datetime.strptime(form["start_date"], "%Y-%m-%d")
+        except ValueError:
+            pass
+    db.add(BarrelAgingRecord(
+        barrel_id=int(form["barrel_id"]),
+        session_id=session_id,
+        start_date=start_date,
+        target_days=int(form["target_days"]) if form.get("target_days") else None,
+        notes=form.get("notes") or None,
+    ))
+    db.commit()
+    return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+
+
+@router.post("/brew-sessions/{session_id}/barrel-aging/{record_id}/end")
+async def barrel_aging_end(session_id: int, record_id: int, request: Request, db: Session = Depends(get_db)):
+    record = db.get(BarrelAgingRecord, record_id)
+    if record and record.session_id == session_id:
+        form = await request.form()
+        end_date = datetime.utcnow()
+        if form.get("end_date"):
+            try:
+                end_date = datetime.strptime(form["end_date"], "%Y-%m-%d")
+            except ValueError:
+                pass
+        record.end_date = end_date
+        db.commit()
+    return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+
+
+@router.post("/brew-sessions/{session_id}/barrel-aging/{record_id}/entries")
+async def barrel_aging_entry_create(session_id: int, record_id: int, request: Request, db: Session = Depends(get_db)):
+    record = db.get(BarrelAgingRecord, record_id)
+    if not record or record.session_id != session_id:
+        return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+    form = await request.form()
+    recorded_at = datetime.utcnow()
+    if form.get("recorded_at"):
+        try:
+            recorded_at = datetime.strptime(form["recorded_at"], "%Y-%m-%dT%H:%M")
+        except ValueError:
+            pass
+    db.add(BarrelAgingEntry(
+        record_id=record_id,
+        recorded_at=recorded_at,
+        gravity=float(form["gravity"]) if form.get("gravity") else None,
+        abv=float(form["abv"]) if form.get("abv") else None,
+        flavor_notes=form.get("flavor_notes") or None,
+        notes=form.get("notes") or None,
+    ))
+    db.commit()
+    return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+
+
+@router.post("/brew-sessions/{session_id}/barrel-aging/{record_id}/entries/{entry_id}/delete")
+def barrel_aging_entry_delete(session_id: int, record_id: int, entry_id: int, db: Session = Depends(get_db)):
+    entry = db.get(BarrelAgingEntry, entry_id)
+    if entry and entry.record_id == record_id:
+        db.delete(entry)
+        db.commit()
+    return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+
+
+@router.post("/brew-sessions/{session_id}/barrel-aging/{record_id}/delete")
+def barrel_aging_record_delete(session_id: int, record_id: int, db: Session = Depends(get_db)):
+    record = db.get(BarrelAgingRecord, record_id)
+    if record and record.session_id == session_id:
+        db.delete(record)
+        db.commit()
+    return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+
+
+# ── Grape variety library ─────────────────────────────────────────────────────
+
+@router.post("/grapes/create")
+async def grape_create(request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    db.add(GrapeVariety(
+        name=form["name"],
+        color=form.get("color") or None,
+        origin=form.get("origin") or None,
+        notes=form.get("notes") or None,
+    ))
+    db.commit()
+    return RedirectResponse("/ingredients?tab=grapes", status_code=303)
+
+
+@router.post("/grapes/{item_id}/update")
+async def grape_update(item_id: int, request: Request, db: Session = Depends(get_db)):
+    item = db.get(GrapeVariety, item_id)
+    if not item:
+        return RedirectResponse("/ingredients?tab=grapes", status_code=303)
+    form = await request.form()
+    item.name = form["name"]
+    item.color = form.get("color") or None
+    item.origin = form.get("origin") or None
+    item.notes = form.get("notes") or None
+    db.commit()
+    return RedirectResponse("/ingredients?tab=grapes", status_code=303)
+
+
+@router.post("/grapes/{item_id}/delete")
+def grape_delete(item_id: int, db: Session = Depends(get_db)):
+    item = db.get(GrapeVariety, item_id)
+    if not item:
+        return RedirectResponse("/ingredients?tab=grapes", status_code=303)
+    if db.query(RecipeGrape).filter_by(grape_id=item_id).count():
+        msg = f"{item.name} is used in one or more recipes and cannot be deleted."
+        return RedirectResponse(f"/ingredients?tab=grapes&error={msg}", status_code=303)
+    db.delete(item)
+    db.commit()
+    return RedirectResponse("/ingredients?tab=grapes", status_code=303)
 
 
 # Export public (unauthenticated) router for main.py

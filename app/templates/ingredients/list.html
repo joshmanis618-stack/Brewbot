@@ -19,6 +19,7 @@
     ('hops',         'Hops',         hops|length),
     ('yeasts',       'Yeast',        yeasts|length),
     ('miscs',        'Misc',         miscs|length),
+    ('grapes',       '🍷 Grapes',    grapes|length),
   ] %}
   <li class="nav-item">
     <a class="nav-link {{ 'active' if tab == t }}" href="/ingredients?tab={{ t }}">
@@ -485,6 +486,91 @@
     </form>
   </div>
 </div>
+{% if tab == 'grapes' %}
+<div class="d-flex justify-content-end mb-3">
+  <button class="btn btn-brew btn-sm" onclick="openGrape()">
+    <i class="bi bi-plus-lg me-1"></i>Add Grape Variety
+  </button>
+</div>
+{% if grapes %}
+<div class="table-responsive">
+  <table class="table table-hover ingredient-table">
+    <thead class="table-light">
+      <tr>
+        <th>Name</th><th>Color</th><th>Origin</th><th>Notes</th><th style="width:90px;"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for g in grapes %}
+      <tr>
+        <td class="fw-semibold">{{ g.name }}</td>
+        <td>{{ g.color|title if g.color else '—' }}</td>
+        <td>{{ g.origin or '—' }}</td>
+        <td class="text-muted small">{{ g.notes or '—' }}</td>
+        <td class="text-end">
+          <button class="btn btn-sm btn-outline-secondary me-1"
+                  onclick='openGrape({{ {"id":g.id,"name":g.name,"color":g.color or "","origin":g.origin or "","notes":g.notes or ""}|tojson }})'>
+            <i class="bi bi-pencil"></i>
+          </button>
+          <form method="post" action="/grapes/{{ g.id }}/delete" class="d-inline"
+                onsubmit="return confirm('Delete {{ g.name }}?')">
+            <button type="submit" class="btn btn-sm btn-outline-danger">
+              <i class="bi bi-trash"></i>
+            </button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="text-muted text-center py-5">No grape varieties yet. Add your first variety above.</p>
+{% endif %}
+
+<!-- Grape Modal -->
+<div class="modal fade" id="grapeModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form id="grapeForm" method="post">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="grapeModalTitle">Add Grape Variety</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-8">
+              <label class="form-label">Name <span class="text-danger">*</span></label>
+              <input type="text" name="name" id="gName" class="form-control" required>
+            </div>
+            <div class="col-4">
+              <label class="form-label">Color</label>
+              <select name="color" id="gColor" class="form-select">
+                <option value="">—</option>
+                {% for c in ['red','white','rosé'] %}
+                <option>{{ c }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Origin</label>
+              <input type="text" name="origin" id="gOrigin" class="form-control"
+                     placeholder="e.g. France, Italy, California">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Notes</label>
+              <textarea name="notes" id="gNotes" class="form-control" rows="2"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-brew">Save</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block page_help %}
@@ -494,6 +580,7 @@
   <li><strong>Hops</strong> — hop varieties used for bitterness, flavor, and aroma.</li>
   <li><strong>Yeast</strong> — yeast strains that determine attenuation, flavor character, and fermentation temperature range.</li>
   <li><strong>Misc</strong> — water agents, finings, spices, fruit, and any other additions.</li>
+  <li><strong>Grapes</strong> — grape varieties for wine recipes: color, origin, and tasting notes.</li>
 </ul>
 <h6>Fermentable fields</h6>
 <ul>
@@ -586,6 +673,25 @@ function openYeast(d) {
     document.getElementById('yAttn').value = 75;
   }
   bootstrap.Modal.getOrCreateInstance(document.getElementById('yeastModal')).show();
+}
+
+function openGrape(d) {
+  const form = document.getElementById('grapeForm');
+  const title = document.getElementById('grapeModalTitle');
+  if (!form) return;
+  if (d && d.id) {
+    title.textContent = 'Edit Grape Variety';
+    form.action = `/grapes/${d.id}/update`;
+    document.getElementById('gName').value   = d.name || '';
+    document.getElementById('gColor').value  = d.color || '';
+    document.getElementById('gOrigin').value = d.origin || '';
+    document.getElementById('gNotes').value  = d.notes || '';
+  } else {
+    title.textContent = 'Add Grape Variety';
+    form.action = '/grapes/create';
+    form.reset();
+  }
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('grapeModal')).show();
 }
 
 function openMisc(d) {

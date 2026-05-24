@@ -54,6 +54,15 @@ class Recipe(Base):
     ibu = Column(Float)
     color_srm = Column(Float)
 
+    # Multi-craft
+    craft = Column(String(20), default="beer")  # beer, wine, spirits
+
+    # Wine-specific
+    wine_style = Column(String(20))          # red, white, rosé, orange
+    skin_contact_days = Column(Integer)      # days on skins (red / orange wines)
+    target_ta = Column(Float)                # titratable acidity g/L
+    target_ph = Column(Float)
+
     notes = Column(Text)
     brewer = Column(String(100))
     version = Column(Integer, default=1)
@@ -66,6 +75,7 @@ class Recipe(Base):
     hops = relationship("RecipeHop", back_populates="recipe", cascade="all, delete-orphan")
     yeasts = relationship("RecipeYeast", back_populates="recipe", cascade="all, delete-orphan")
     miscs = relationship("RecipeMisc", back_populates="recipe", cascade="all, delete-orphan")
+    grapes = relationship("RecipeGrape", back_populates="recipe", cascade="all, delete-orphan")
     brew_sessions = relationship("BrewSession", back_populates="recipe", cascade="all, delete-orphan")
     brew_programs = relationship("BrewProgram", back_populates="recipe", cascade="all, delete-orphan")
 

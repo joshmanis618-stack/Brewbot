@@ -10,6 +10,7 @@ class BrewSession(Base):
     id = Column(Integer, primary_key=True)
     recipe_id = Column(Integer, ForeignKey("recipes.id"), nullable=False)
     equipment_id = Column(Integer, ForeignKey("equipment.id"), nullable=True)  # override
+    craft = Column(String(20), default="beer")  # beer, wine, spirits
 
     status = Column(String(20), default="planned")   # planned, brewing, fermenting, conditioning, complete
     brew_date = Column(DateTime, nullable=True)
@@ -31,6 +32,11 @@ class BrewSession(Base):
 
     recipe = relationship("Recipe", back_populates="brew_sessions")
     equipment = relationship("Equipment")
+    barrel_aging_records = relationship(
+        "BarrelAgingRecord",
+        back_populates="session",
+        cascade="all, delete-orphan",
+    )
     brew_session_steps = relationship(
         "BrewSessionStep",
         back_populates="session",
