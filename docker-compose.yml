@@ -7,7 +7,7 @@ services:
       - DATABASE_URL=postgresql://brewbot:brewbot@db:5432/brewbot
       - MQTT_HOST=mosquitto
       - MQTT_PORT=1883
-      - SESSION_SECRET=REPLACE_WITH_STRONG_SECRET
+      - SESSION_SECRET=${SESSION_SECRET}
     depends_on:
       db:
         condition: service_healthy
