@@ -18,6 +18,9 @@
       data-saved-style-id="{{ recipe.style_id or '' }}"
       data-saved-wine-style="{{ recipe.wine_style or '' }}"
       data-saved-spirits-style="{{ recipe.spirits_style or '' }}"
+      data-saved-mead-style="{{ recipe.mead_style or '' }}"
+      data-saved-cider-style="{{ recipe.cider_style or '' }}"
+      data-saved-seltzer-style="{{ recipe.seltzer_style or '' }}"
       data-saved-type="{{ recipe.type or 'All Grain' }}">
 
   <div class="row g-4">
@@ -37,7 +40,7 @@
             <div class="col-md-2">
               <label class="form-label">Craft</label>
               <select name="craft" id="craft-select" class="form-select" onchange="updateCraftSections()">
-                {% for c in [('beer','🍺 Beer'),('wine','🍷 Wine'),('spirits','🥃 Spirits')] %}
+                {% for c in [('beer','🍺 Beer'),('wine','🍷 Wine'),('mead','🍯 Mead'),('cider','🍎 Cider'),('seltzer','🫧 Seltzer'),('spirits','🥃 Spirits')] %}
                 <option value="{{ c[0] }}" {{ 'selected' if (recipe and recipe.craft == c[0]) or (not recipe and request.session.get('craft','beer') == c[0]) }}>{{ c[1] }}</option>
                 {% endfor %}
               </select>
@@ -172,10 +175,10 @@
         </div>
       </div>
 
-      <!-- Grapes (wine craft only) -->
-      <div class="card mb-4" id="grapes-card" data-craft="wine"{{ ' style="display:none;"' if ic != 'wine' else '' }}>
+      <!-- Grapes / Fruit & Juice (wine + cider) -->
+      <div class="card mb-4" id="grapes-card" data-craft="wine,cider"{{ ' style="display:none;"' if ic not in ('wine','cider') else '' }}>
         <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
-          <span><i class="bi bi-tree me-2"></i>Grapes</span>
+          <span id="grapes-section-label"><i class="bi bi-tree me-2"></i>{{ 'Fruit &amp; Juice' if ic == 'cider' else 'Grapes' }}</span>
           <button type="button" class="btn btn-brew btn-sm" onclick="addIngredientRow('grape')">
             <i class="bi bi-plus-lg me-1"></i>Add
           </button>
@@ -219,8 +222,8 @@
         </div>
       </div>
 
-      <!-- Mash Schedule (beer / spirits) -->
-      <div class="card mb-4" data-craft="beer,spirits"{{ ' style="display:none;"' if ic == 'wine' else '' }}>
+      <!-- Mash Schedule (beer / spirits only) -->
+      <div class="card mb-4" data-craft="beer,spirits"{{ ' style="display:none;"' if ic not in ('beer','spirits') else '' }}>
         <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
           <span><i class="bi bi-thermometer-half me-2"></i>Mash Schedule</span>
           <button type="button" class="btn btn-brew btn-sm" onclick="addIngredientRow('mash_step')">
@@ -269,8 +272,8 @@
         </div>
       </div>
 
-      <!-- Fermentables (beer / spirits) -->
-      <div class="card mb-4" data-craft="beer,spirits"{{ ' style="display:none;"' if ic == 'wine' else '' }}>
+      <!-- Fermentables (beer / spirits / mead / seltzer) -->
+      <div class="card mb-4" data-craft="beer,spirits,mead,seltzer"{{ ' style="display:none;"' if ic not in ('beer','spirits','mead','seltzer') else '' }}>
         <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
           <span><i class="bi bi-bag me-2"></i>Fermentables</span>
           <button type="button" class="btn btn-brew btn-sm" onclick="addIngredientRow('fermentable')">
@@ -707,6 +710,69 @@ const SPIRITS_STYLES = [
   ]],
 ];
 
+const MEAD_STYLES = [
+  ['Traditional Mead', [
+    ['Dry Traditional Mead',       'Dry Traditional Mead'],
+    ['Semi-Sweet Traditional Mead','Semi-Sweet Traditional Mead'],
+    ['Sweet Traditional Mead',     'Sweet Traditional Mead'],
+  ]],
+  ['Melomels (Fruit)', [
+    ['Cyser',                'Cyser (Apple)'],
+    ['Pyment',               'Pyment (Grape)'],
+    ['Berry Melomel',        'Berry Melomel'],
+    ['Stone Fruit Melomel',  'Stone Fruit Melomel'],
+    ['Tropical Melomel',     'Tropical Melomel'],
+    ['Other Melomel',        'Other Melomel'],
+  ]],
+  ['Flavored Mead', [
+    ['Metheglin',            'Metheglin (Spice / Herb)'],
+    ['Bochet',               'Bochet (Caramelized Honey)'],
+    ['Braggot',              'Braggot (Honey + Malt)'],
+    ['Open Category Mead',   'Open Category / Experimental'],
+  ]],
+];
+
+const CIDER_STYLES = [
+  ['Traditional Cider', [
+    ['New World Cider',      'New World Cider (Crisp / Dry)'],
+    ['English Cider',        'English Cider (Tannic / Medium)'],
+    ['French Cider',         'French Cider (Farmhouse / Funky)'],
+    ['New England Cider',    'New England Cider (Rustic / High-ABV)'],
+  ]],
+  ['Perry', [
+    ['Traditional Perry',    'Traditional Perry (Pear / Tannic)'],
+    ['New World Perry',      'New World Perry (Lighter / Fruity)'],
+  ]],
+  ['Specialty Cider', [
+    ['Semi-Sweet Cider',     'Semi-Sweet Cider'],
+    ['Sweet Cider',          'Sweet Cider'],
+    ['Sparkling Cider',      'Sparkling / Pét-Nat'],
+    ['Ice Cider',            'Ice Cider (Concentrated)'],
+    ['Fruit Cider',          'Fruit Cider (Added Fruit)'],
+    ['Hopped Cider',         'Hopped Cider'],
+    ['Applewine',            'Applewine (High-ABV)'],
+    ['Open Cider',           'Open Category / Experimental'],
+  ]],
+];
+
+const SELTZER_STYLES = [
+  ['Hard Seltzer', [
+    ['Standard Hard Seltzer','Standard Hard Seltzer (Plain)'],
+    ['Fruit Hard Seltzer',   'Fruit Hard Seltzer'],
+    ['Hop-Infused Seltzer',  'Hop-Infused Seltzer'],
+    ['Botanical Seltzer',    'Botanical / Flavored Seltzer'],
+    ['Specialty Seltzer',    'Specialty / Experimental'],
+  ]],
+];
+
+const _STYLE_MAP = {
+  wine:    { groups: WINE_STYLES,    name: 'wine_style',    label: 'Wine Style',    savedKey: 'savedWineStyle'    },
+  spirits: { groups: SPIRITS_STYLES, name: 'spirits_style', label: 'Spirits Style', savedKey: 'savedSpiritsStyle' },
+  mead:    { groups: MEAD_STYLES,    name: 'mead_style',    label: 'Mead Style',    savedKey: 'savedMeadStyle'    },
+  cider:   { groups: CIDER_STYLES,   name: 'cider_style',   label: 'Cider Style',   savedKey: 'savedCiderStyle'   },
+  seltzer: { groups: SELTZER_STYLES, name: 'seltzer_style', label: 'Seltzer Style', savedKey: 'savedSeltzerStyle' },
+};
+
 function _populateStyleSelect(craft) {
   const form = document.getElementById('recipe-form');
   const sel  = document.getElementById('style-select');
@@ -715,21 +781,18 @@ function _populateStyleSelect(craft) {
   if (craft === 'beer') {
     sel.name = 'style_id';
     document.getElementById('style-label').textContent = 'Beer Style';
-    // Clone options from the server-rendered hidden bank — preserves all data-* attributes
     const bank = document.getElementById('beer-styles-data');
     Array.from(bank.options).forEach(o => sel.appendChild(o.cloneNode(true)));
-
   } else {
-    const groups = craft === 'wine' ? WINE_STYLES : SPIRITS_STYLES;
-    const saved  = craft === 'wine'
-      ? (form.dataset.savedWineStyle || '')
-      : (form.dataset.savedSpiritsStyle || '');
-    sel.name = craft === 'wine' ? 'wine_style' : 'spirits_style';
-    document.getElementById('style-label').textContent = craft === 'wine' ? 'Wine Style' : 'Spirits Style';
-    const none = document.createElement('option');
-    none.value = ''; none.textContent = '— None —';
+    const cfg   = _STYLE_MAP[craft];
+    if (!cfg) { updateStyleTargets(); return; }
+    const saved = form.dataset[cfg.savedKey] || '';
+    sel.name    = cfg.name;
+    document.getElementById('style-label').textContent = cfg.label;
+    const none  = document.createElement('option');
+    none.value  = ''; none.textContent = '— None —';
     sel.appendChild(none);
-    groups.forEach(([groupLabel, opts]) => {
+    cfg.groups.forEach(([groupLabel, opts]) => {
       const og = document.createElement('optgroup');
       og.label = groupLabel;
       opts.forEach(([val, label]) => {
@@ -745,15 +808,21 @@ function _populateStyleSelect(craft) {
 }
 
 const CRAFT_FIELD_LABELS = {
-  beer:    { batch: 'Batch Size', boil: 'Pre-boil Volume', time: 'Boil Time (min)', eff: 'Mash Efficiency (%)' },
-  wine:    { batch: 'Target Yield', boil: 'Must / Crush Volume', time: 'Press / Run Time (min)', eff: 'Juice Yield (%)' },
-  spirits: { batch: 'Still Charge', boil: 'Low Wines Volume', time: 'Run Time (min)', eff: 'Spirit Yield (%)' },
+  beer:    { batch: 'Batch Size', boil: 'Pre-boil Volume', time: 'Boil Time (min)', eff: 'Mash Efficiency (%)', showBoilSize: true,  showBoilTime: true  },
+  wine:    { batch: 'Target Yield', boil: 'Must / Crush Volume', time: 'Press / Run Time (min)', eff: 'Juice Yield (%)',  showBoilSize: true,  showBoilTime: true  },
+  spirits: { batch: 'Still Charge', boil: 'Low Wines Volume', time: 'Run Time (min)', eff: 'Spirit Yield (%)',            showBoilSize: true,  showBoilTime: true  },
+  mead:    { batch: 'Batch Size', boil: '',                  time: '',                  eff: 'Honey Yield (%)',           showBoilSize: false, showBoilTime: false },
+  cider:   { batch: 'Batch Size', boil: 'Juice Volume',      time: '',                  eff: 'Juice Yield (%)',           showBoilSize: true,  showBoilTime: false },
+  seltzer: { batch: 'Batch Size', boil: '',                  time: '',                  eff: 'Sugar Efficiency (%)',      showBoilSize: false, showBoilTime: false },
 };
 
 const CRAFT_TYPE_OPTIONS = {
   beer:    [['All Grain','All Grain'],['Extract','Extract'],['Partial Mash','Partial Mash']],
   spirits: [['All Grain','Grain Mash'],['Fruit','Fruit Wash'],['Molasses','Molasses / Sugar Base'],['Agave','Agave Base']],
   wine:    [],
+  mead:    [['Traditional','Traditional (Honey + Water)'],['Melomel','Melomel (Fruit)'],['Metheglin','Metheglin (Spice / Herb)'],['Cyser','Cyser (Apple)'],['Pyment','Pyment (Grape)'],['Bochet','Bochet (Caramelized Honey)'],['Braggot','Braggot (Honey + Malt)']],
+  cider:   [['Standard','Standard Cider (Dry)'],['Semi-Sweet','Semi-Sweet'],['Sweet','Sweet'],['Sparkling','Sparkling / Pét-Nat'],['Ice Cider','Ice Cider'],['Perry','Perry (Pear)'],['Fruit Cider','Fruit Cider']],
+  seltzer: [['Standard','Standard Hard Seltzer'],['Fruit','Fruit-Flavored'],['Hop','Hop-Infused'],['Botanical','Botanical / Flavored']],
 };
 
 // ── Craft visibility ──────────────────────────────────────────────────────────
@@ -787,12 +856,22 @@ function updateCraftSections() {
     });
   }
 
-  // Field labels per craft
+  // Field labels + boil group visibility per craft
   const labels = CRAFT_FIELD_LABELS[craft] || CRAFT_FIELD_LABELS.beer;
   document.getElementById('batch-label').textContent      = labels.batch;
   document.getElementById('boil-label').textContent       = labels.boil;
   document.getElementById('boil-time-label').textContent  = labels.time;
   document.getElementById('efficiency-label').textContent = labels.eff;
+  document.getElementById('boil-size-group').style.display = labels.showBoilSize ? '' : 'none';
+  document.getElementById('boil-time-group').style.display = labels.showBoilTime ? '' : 'none';
+
+  // Rename grapes section header for cider
+  const grapesLabel = document.getElementById('grapes-section-label');
+  if (grapesLabel) {
+    grapesLabel.innerHTML = craft === 'cider'
+      ? '<i class="bi bi-apple me-2"></i>Fruit &amp; Juice'
+      : '<i class="bi bi-tree me-2"></i>Grapes';
+  }
 
   // Equipment: show only profiles tagged to this craft
   const eqSel = document.getElementById('equipment_select');

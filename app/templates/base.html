@@ -17,39 +17,31 @@
     <a class="navbar-brand fw-bold" href="/">
       {% if current_craft == 'wine' %}🍇 Winebot
       {% elif current_craft == 'spirits' %}🍾 Spiritbot
+      {% elif current_craft == 'mead' %}🍯 Meadbot
+      {% elif current_craft == 'cider' %}🍎 Ciderbot
+      {% elif current_craft == 'seltzer' %}🫧 Seltzbot
       {% else %}🍺 Brewbot{% endif %}
     </a>
     <div class="dropdown me-2">
       <button class="btn btn-sm btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
         {% if current_craft == 'wine' %}🍷 Wine
         {% elif current_craft == 'spirits' %}🥃 Spirits
+        {% elif current_craft == 'mead' %}🍯 Mead
+        {% elif current_craft == 'cider' %}🍎 Cider
+        {% elif current_craft == 'seltzer' %}🫧 Seltzer
         {% else %}🍺 Beer{% endif %}
       </button>
       <ul class="dropdown-menu dropdown-menu-dark">
+        {% for val, label in [('beer','🍺 Beer'),('wine','🍷 Wine'),('mead','🍯 Mead'),('cider','🍎 Cider'),('seltzer','🫧 Seltzer'),('spirits','🥃 Spirits')] %}
         <li>
           <form method="post" action="/set-craft" class="mb-0">
-            <input type="hidden" name="craft" value="beer">
-            <button type="submit" class="dropdown-item {% if current_craft == 'beer' %}active{% endif %}">
-              🍺 Beer
+            <input type="hidden" name="craft" value="{{ val }}">
+            <button type="submit" class="dropdown-item {% if current_craft == val %}active{% endif %}">
+              {{ label }}
             </button>
           </form>
         </li>
-        <li>
-          <form method="post" action="/set-craft" class="mb-0">
-            <input type="hidden" name="craft" value="wine">
-            <button type="submit" class="dropdown-item {% if current_craft == 'wine' %}active{% endif %}">
-              🍷 Wine
-            </button>
-          </form>
-        </li>
-        <li>
-          <form method="post" action="/set-craft" class="mb-0">
-            <input type="hidden" name="craft" value="spirits">
-            <button type="submit" class="dropdown-item {% if current_craft == 'spirits' %}active{% endif %}">
-              🥃 Spirits
-            </button>
-          </form>
-        </li>
+        {% endfor %}
       </ul>
     </div>
     <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navMain">
@@ -114,10 +106,10 @@
             <i class="bi bi-calculator me-1"></i>Converter
           </a>
         </li>
-        {% if current_craft == 'wine' %}
+        {% if current_craft in ('wine', 'mead', 'cider') %}
         <li class="nav-item">
           <a class="nav-link rounded px-3 {% if page == 'wine_tools' %}active{% endif %}" href="/wine-tools">
-            <i class="bi bi-droplet-half me-1"></i>Wine Tools
+            <i class="bi bi-droplet-half me-1"></i>Ferment Tools
           </a>
         </li>
         {% endif %}

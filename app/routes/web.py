@@ -173,7 +173,7 @@ def _form_context(db: Session) -> dict:
 async def set_craft(request: Request):
     form = await request.form()
     craft = form.get("craft", "beer")
-    if craft in ("beer", "wine", "spirits"):
+    if craft in ("beer", "wine", "spirits", "mead", "cider", "seltzer"):
         request.session["craft"] = craft
     ref = request.headers.get("referer", "/")
     return RedirectResponse(ref, status_code=303)
@@ -332,6 +332,9 @@ def _apply_craft_fields(recipe, form):
     recipe.target_ta = float(form["target_ta"]) if form.get("target_ta") else None
     recipe.target_ph = float(form["target_ph"]) if form.get("target_ph") else None
     recipe.spirits_style = form.get("spirits_style") or None
+    recipe.mead_style    = form.get("mead_style") or None
+    recipe.cider_style   = form.get("cider_style") or None
+    recipe.seltzer_style = form.get("seltzer_style") or None
 
 
 @router.post("/recipes", response_class=HTMLResponse)

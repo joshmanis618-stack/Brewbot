@@ -64,7 +64,12 @@ class Recipe(Base):
     target_ph = Column(Float)
 
     # Spirits-specific
-    spirits_style = Column(String(100))      # e.g. "Bourbon (American Corn Whiskey)"
+    spirits_style = Column(String(100))
+
+    # Mead / Cider / Seltzer styles
+    mead_style    = Column(String(100))
+    cider_style   = Column(String(100))
+    seltzer_style = Column(String(100))
 
     notes = Column(Text)
     brewer = Column(String(100))
