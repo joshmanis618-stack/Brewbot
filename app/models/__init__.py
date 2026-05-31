@@ -11,10 +11,11 @@ from .brew_session import BrewSession
 from .device import RigProfile, Device, DeviceReading
 from .brew_program import BrewProgram, BrewStep, BrewStepCommand, BrewSessionStep
 from .fermentation_reading import FermentationReading
-from .barrel import Barrel, BarrelAgingRecord, BarrelAgingEntry
+from .barrel import Barrel, BarrelAgingRecord, BarrelAgingEntry, BarrelDispositionEntry
 from .grape_variety import GrapeVariety, RecipeGrape
 from .mash_step import MashStep
 from .wine import WineMLFEntry, WineFiningEntry
+from .spirits import StillRun, StillCut
 
 __all__ = [
     "Base",
@@ -42,9 +43,12 @@ __all__ = [
     "Barrel",
     "BarrelAgingRecord",
     "BarrelAgingEntry",
+    "BarrelDispositionEntry",
     "GrapeVariety",
     "RecipeGrape",
     "MashStep",
     "WineMLFEntry",
     "WineFiningEntry",
+    "StillRun",
+    "StillCut",
 ]

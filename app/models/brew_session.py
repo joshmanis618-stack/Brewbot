@@ -68,3 +68,9 @@ class BrewSession(Base):
         cascade="all, delete-orphan",
         order_by="WineFiningEntry.date",
     )
+    still_runs = relationship(
+        "StillRun",
+        back_populates="session",
+        cascade="all, delete-orphan",
+        order_by="StillRun.run_number",
+    )

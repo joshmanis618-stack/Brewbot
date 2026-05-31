@@ -20,7 +20,8 @@ from app.models.recipe import Recipe, RecipeFermentable, RecipeHop, RecipeMisc, 
 from app.models.style import Style
 from app.models.yeast import Yeast
 from app.models.user import User
-from app.models.barrel import Barrel, BarrelAgingRecord, BarrelAgingEntry
+from app.models.barrel import Barrel, BarrelAgingRecord, BarrelAgingEntry, BarrelDispositionEntry
+from app.models.spirits import StillRun, StillCut
 from app.models.grape_variety import GrapeVariety, RecipeGrape
 from app.models.mash_step import MashStep
 from app.models.wine import WineMLFEntry, WineFiningEntry
@@ -1503,8 +1504,10 @@ def brew_session_detail(session_id: int, request: Request, db: Session = Depends
         selectinload(BrewSession.fermentation_readings),
         selectinload(BrewSession.barrel_aging_records).selectinload(BarrelAgingRecord.barrel),
         selectinload(BrewSession.barrel_aging_records).selectinload(BarrelAgingRecord.entries),
+        selectinload(BrewSession.barrel_aging_records).selectinload(BarrelAgingRecord.disposition_entries),
         selectinload(BrewSession.mlf_entries),
         selectinload(BrewSession.fining_entries),
+        selectinload(BrewSession.still_runs).selectinload(StillRun.cuts),
     ).filter(BrewSession.id == session_id).first()
     if not session:
         return RedirectResponse("/brew-sessions", status_code=303)
@@ -1649,6 +1652,125 @@ def wine_tools_page(request: Request):
     return templates.TemplateResponse(request, "wine_tools.html", {"page": "wine_tools"})
 
 
+# ── Spirits tools ─────────────────────────────────────────────────────────────
+
+@router.get("/spirits-tools", response_class=HTMLResponse)
+def spirits_tools_page(request: Request):
+    return templates.TemplateResponse(request, "spirits_tools.html", {"page": "spirits_tools"})
+
+
+# ── Still run log ─────────────────────────────────────────────────────────────
+
+@router.post("/brew-sessions/{session_id}/still-runs")
+async def still_run_create(session_id: int, request: Request, db: Session = Depends(get_db)):
+    session = db.get(BrewSession, session_id)
+    if not session:
+        return RedirectResponse("/brew-sessions", status_code=303)
+    form = await request.form()
+    run_date = datetime.utcnow()
+    if form.get("run_date"):
+        try:
+            run_date = datetime.strptime(form["run_date"], "%Y-%m-%d")
+        except ValueError:
+            pass
+    existing = db.query(StillRun).filter(StillRun.session_id == session_id).count()
+    db.add(StillRun(
+        session_id=session_id,
+        run_number=existing + 1,
+        run_date=run_date,
+        charge_volume_l=float(form["charge_volume_l"]) if form.get("charge_volume_l") else None,
+        charge_abv=float(form["charge_abv"]) if form.get("charge_abv") else None,
+        still_type=form.get("still_type") or "pot",
+        notes=form.get("notes") or None,
+    ))
+    db.commit()
+    return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+
+
+@router.post("/brew-sessions/{session_id}/still-runs/{run_id}/delete")
+def still_run_delete(session_id: int, run_id: int, db: Session = Depends(get_db)):
+    run = db.get(StillRun, run_id)
+    if run and run.session_id == session_id:
+        db.delete(run)
+        db.commit()
+    return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+
+
+@router.post("/brew-sessions/{session_id}/still-runs/{run_id}/cuts")
+async def still_cut_create(session_id: int, run_id: int, request: Request, db: Session = Depends(get_db)):
+    run = db.get(StillRun, run_id)
+    if not run or run.session_id != session_id:
+        return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+    form = await request.form()
+    db.add(StillCut(
+        still_run_id=run_id,
+        cut_type=form.get("cut_type", "hearts"),
+        volume_l=float(form["volume_l"]) if form.get("volume_l") else None,
+        start_abv=float(form["start_abv"]) if form.get("start_abv") else None,
+        end_abv=float(form["end_abv"]) if form.get("end_abv") else None,
+        appearance=form.get("appearance") or None,
+        aroma=form.get("aroma") or None,
+        flavor=form.get("flavor") or None,
+        finish=form.get("finish") or None,
+        overall_notes=form.get("overall_notes") or None,
+    ))
+    db.commit()
+    return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+
+
+@router.post("/brew-sessions/{session_id}/still-runs/{run_id}/cuts/{cut_id}/delete")
+def still_cut_delete(session_id: int, run_id: int, cut_id: int, db: Session = Depends(get_db)):
+    cut = db.get(StillCut, cut_id)
+    if cut and cut.still_run_id == run_id:
+        db.delete(cut)
+        db.commit()
+    return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+
+
+# ── Barrel disposition log ─────────────────────────────────────────────────────
+
+@router.post("/brew-sessions/{session_id}/barrel-aging/{record_id}/disposition")
+async def barrel_disposition_create(session_id: int, record_id: int,
+                                    request: Request, db: Session = Depends(get_db)):
+    record = db.get(BarrelAgingRecord, record_id)
+    if not record or record.session_id != session_id:
+        return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+    form = await request.form()
+    event_date = datetime.utcnow()
+    if form.get("event_date"):
+        try:
+            event_date = datetime.strptime(form["event_date"], "%Y-%m-%d")
+        except ValueError:
+            pass
+    action = form.get("action", "proof check")
+    db.add(BarrelDispositionEntry(
+        record_id=record_id,
+        event_date=event_date,
+        action=action,
+        proof_at_action=float(form["proof_at_action"]) if form.get("proof_at_action") else None,
+        volume_l=float(form["volume_l"]) if form.get("volume_l") else None,
+        destination=form.get("destination") or None,
+        notes=form.get("notes") or None,
+    ))
+    # Update disposition status if action changes it
+    if action in ("dumped", "bottled", "re-casked", "blended", "sold"):
+        record.disposition = action
+        if not record.end_date:
+            record.end_date = event_date
+    db.commit()
+    return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+
+
+@router.post("/brew-sessions/{session_id}/barrel-aging/{record_id}/disposition/{entry_id}/delete")
+def barrel_disposition_delete(session_id: int, record_id: int, entry_id: int,
+                               db: Session = Depends(get_db)):
+    entry = db.get(BarrelDispositionEntry, entry_id)
+    if entry and entry.record_id == record_id:
+        db.delete(entry)
+        db.commit()
+    return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+
+
 # ── Barrel registry ──────────────────────────────────────────────────────────
 
 WOOD_TYPES = ["American Oak", "French Oak", "Hungarian Oak", "Cherry", "Acacia", "Mulberry", "Chestnut"]
@@ -1752,6 +1874,8 @@ async def barrel_aging_start(session_id: int, request: Request, db: Session = De
         start_date=start_date,
         target_days=int(form["target_days"]) if form.get("target_days") else None,
         target_55gal_months=float(form["target_55gal_months"]) if form.get("target_55gal_months") else None,
+        fill_proof=float(form["fill_proof"]) if form.get("fill_proof") else None,
+        disposition='aging',
         notes=form.get("notes") or None,
     ))
     db.commit()

@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+{% block title %}Still Tools — Brewbot{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2 class="mb-0"><i class="bi bi-thermometer-half me-2"></i>Still Tools</h2>
+</div>
+
+<div class="row g-4">
+
+  <!-- ── Proofing / Dilution Calculator ──────────────────────────────────── -->
+  <div class="col-md-6 col-xl-4">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Proofing &amp; Dilution (Pearce)</div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">Calculate how much water to add to hit a target proof. Enter strength as ABV (%) or proof (US proof = ABV × 2).</p>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small mb-1">Current volume (L)</label>
+            <input id="d_vol" type="number" step="0.1" min="0" class="form-control" placeholder="e.g. 5" oninput="calcDilute()">
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1">Current strength</label>
+            <div class="input-group">
+              <input id="d_abv_i" type="number" step="0.1" min="0" max="100" class="form-control" placeholder="e.g. 65" oninput="calcDilute()">
+              <select id="d_unit" class="form-select" style="max-width:70px;" onchange="calcDilute()">
+                <option value="abv">%</option>
+                <option value="proof">°Pf</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small mb-1">Target strength</label>
+            <div class="input-group">
+              <input id="d_abv_f" type="number" step="0.1" min="0" max="100" class="form-control" placeholder="e.g. 40" oninput="calcDilute()">
+              <span class="input-group-text small" id="d_target_unit_label">%</span>
+            </div>
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1">Spirit temp (°C)</label>
+            <input id="d_temp_c" type="number" step="1" class="form-control" placeholder="e.g. 20" value="20" oninput="calcDilute()">
+          </div>
+        </div>
+        <div class="mt-3 p-3 rounded bg-body-secondary">
+          <div class="row g-2 text-center">
+            <div class="col-6">
+              <div class="small text-muted">Water to add</div>
+              <div class="fw-bold fs-4" id="d_water">—</div>
+            </div>
+            <div class="col-6">
+              <div class="small text-muted">Final volume (est.)</div>
+              <div class="fw-bold fs-4" id="d_final_vol">—</div>
+            </div>
+          </div>
+          <div class="mt-2 text-center small text-muted" id="d_contraction_note"></div>
+        </div>
+        <hr class="my-3">
+        <div class="small text-muted">
+          V<sub>water</sub> = V × (ABV<sub>i</sub>/ABV<sub>f</sub> − 1). Contraction estimate: −3.5% of water added at 40% ABV. Verify with a certified alcoholmeter at TTB standard temperature (60 °F / 15.6 °C).
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Hydrometer Temperature Correction ───────────────────────────────── -->
+  <div class="col-md-6 col-xl-4">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Hydrometer Temperature Correction</div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">Spirit hydrometers are calibrated at 60 °F / 15.6 °C. Correct your observed reading if measuring at a different temperature.</p>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Observed proof (°Pf US)</label>
+          <input id="hc_proof" type="number" step="0.1" min="0" max="200" class="form-control" placeholder="e.g. 80" oninput="calcHydroCorr()">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Measurement temperature (°F)</label>
+          <input id="hc_temp_f" type="number" step="1" class="form-control" placeholder="e.g. 70" oninput="calcHydroCorr()">
+        </div>
+        <div class="mt-3 p-3 rounded bg-body-secondary text-center">
+          <div class="small text-muted">True proof at 60 °F</div>
+          <div class="fw-bold fs-3" id="hc_true_proof">—</div>
+          <div class="small text-muted" id="hc_correction_note"></div>
+        </div>
+        <hr class="my-3">
+        <div class="small text-muted">
+          Correction ≈ −(0.002 × proof + 0.02) × (T<sub>°F</sub> − 60). Simplified from TTB Table 6. For regulatory submissions, always use official gauging tables.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Wash Yield Estimator ─────────────────────────────────────────────── -->
+  <div class="col-md-6 col-xl-4">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Wash Yield Estimator</div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">Estimate the maximum spirit yield from a fermented wash and compare to actual distillate output.</p>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small mb-1">Wash volume (L)</label>
+            <input id="wy_vol" type="number" step="0.5" min="0" class="form-control" placeholder="e.g. 100" oninput="calcWashYield()">
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1">Wash ABV (%)</label>
+            <input id="wy_abv" type="number" step="0.1" min="0" max="20" class="form-control" placeholder="e.g. 8.5" oninput="calcWashYield()">
+          </div>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small mb-1">Still efficiency (%)</label>
+            <input id="wy_eff" type="number" step="1" min="50" max="100" class="form-control" placeholder="e.g. 95" value="95" oninput="calcWashYield()">
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1">Target cut-strength (%)</label>
+            <input id="wy_target_abv" type="number" step="1" min="40" max="95" class="form-control" placeholder="e.g. 63.5" value="63.5" oninput="calcWashYield()">
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Actual hearts collected (L) — optional</label>
+          <input id="wy_actual" type="number" step="0.1" min="0" class="form-control" placeholder="leave blank to see theoretical only" oninput="calcWashYield()">
+        </div>
+        <div class="mt-3 p-3 rounded bg-body-secondary">
+          <div class="row text-center g-2">
+            <div class="col-6">
+              <div class="small text-muted">Pure alcohol in wash</div>
+              <div class="fw-bold" id="wy_pure_etoh">—</div>
+            </div>
+            <div class="col-6">
+              <div class="small text-muted">Theoretical yield</div>
+              <div class="fw-bold" id="wy_theoretical">—</div>
+            </div>
+            <div class="col-6" id="wy_actual_group" style="display:none">
+              <div class="small text-muted">Actual collected</div>
+              <div class="fw-bold" id="wy_actual_display">—</div>
+            </div>
+            <div class="col-6" id="wy_efficiency_group" style="display:none">
+              <div class="small text-muted">Actual efficiency</div>
+              <div class="fw-bold" id="wy_efficiency_display">—</div>
+            </div>
+          </div>
+        </div>
+        <hr class="my-3">
+        <div class="small text-muted">
+          Pure EtOH = vol × ABV/100. Theoretical yield at target strength = (pure EtOH × still_eff/100) / (target_ABV/100). Compare to actual hearts collected.
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── Proofing / Dilution ──────────────────────────────────────────────────────
+document.getElementById('d_unit').addEventListener('change', function() {
+  document.getElementById('d_target_unit_label').textContent = this.value === 'proof' ? '°Pf' : '%';
+  calcDilute();
+});
+
+function calcDilute() {
+  const vol  = parseFloat(document.getElementById('d_vol').value);
+  const unit = document.getElementById('d_unit').value;
+  const raw_i = parseFloat(document.getElementById('d_abv_i').value);
+  const raw_f = parseFloat(document.getElementById('d_abv_f').value);
+  const tc    = parseFloat(document.getElementById('d_temp_c').value) || 20;
+
+  if (isNaN(vol) || isNaN(raw_i) || isNaN(raw_f) || raw_f <= 0) {
+    document.getElementById('d_water').textContent = '—';
+    document.getElementById('d_final_vol').textContent = '—';
+    document.getElementById('d_contraction_note').textContent = '';
+    return;
+  }
+
+  const abv_i = unit === 'proof' ? raw_i / 2 : raw_i;
+  const abv_f = unit === 'proof' ? raw_f / 2 : raw_f;
+
+  if (abv_f >= abv_i) {
+    document.getElementById('d_water').textContent = 'Already at target';
+    document.getElementById('d_final_vol').textContent = '—';
+    document.getElementById('d_contraction_note').textContent = '';
+    return;
+  }
+
+  // Temperature correction to 15.6°C/60°F: ~0.1%/°C expansion for 40% ABV spirit
+  // Apply correction to effective volume
+  const tempCorr = 1 + (tc - 15.6) * 0.001 * (abv_i / 100);
+  const vol_corr = vol * tempCorr;
+
+  // Simple Pearce dilution formula
+  const v_water_simple = vol_corr * (abv_i / abv_f - 1);
+
+  // Contraction correction: ~3.8% × ABV_f/100 × (1 - ABV_f/100) × 4 of water volume
+  const contraction_pct = 3.8 * 4 * (abv_f / 100) * (1 - abv_f / 100);
+  const v_contraction = v_water_simple * contraction_pct / 100;
+  const v_water_adjusted = v_water_simple + v_contraction;
+
+  const v_final = vol + v_water_simple; // apparent volume before contraction
+
+  document.getElementById('d_water').textContent = v_water_adjusted.toFixed(2) + ' L';
+  document.getElementById('d_final_vol').textContent = (v_final - v_contraction).toFixed(2) + ' L';
+  document.getElementById('d_contraction_note').textContent =
+    `Contraction ~${v_contraction.toFixed(2)} L included. Verify final proof with alcoholmeter.`;
+}
+
+// ── Hydrometer correction ─────────────────────────────────────────────────────
+function calcHydroCorr() {
+  const proof = parseFloat(document.getElementById('hc_proof').value);
+  const tempF = parseFloat(document.getElementById('hc_temp_f').value);
+  if (isNaN(proof) || isNaN(tempF)) {
+    document.getElementById('hc_true_proof').textContent = '—';
+    document.getElementById('hc_correction_note').textContent = '';
+    return;
+  }
+  // Correction: simplified from TTB Table 6
+  // correction = -(0.002 × proof + 0.02) × (T_F - 60)
+  const correction = -(0.002 * proof + 0.02) * (tempF - 60);
+  const trueProof = proof + correction;
+  document.getElementById('hc_true_proof').textContent = trueProof.toFixed(1) + ' °Pf';
+  const sign = correction >= 0 ? '+' : '';
+  document.getElementById('hc_correction_note').textContent =
+    `Correction: ${sign}${correction.toFixed(2)} °Pf at ${tempF}°F`;
+}
+
+// ── Wash yield estimator ──────────────────────────────────────────────────────
+function calcWashYield() {
+  const vol  = parseFloat(document.getElementById('wy_vol').value);
+  const abv  = parseFloat(document.getElementById('wy_abv').value);
+  const eff  = parseFloat(document.getElementById('wy_eff').value) || 95;
+  const tgt  = parseFloat(document.getElementById('wy_target_abv').value) || 63.5;
+  const actual = parseFloat(document.getElementById('wy_actual').value);
+
+  if (isNaN(vol) || isNaN(abv)) {
+    ['wy_pure_etoh','wy_theoretical'].forEach(id => document.getElementById(id).textContent = '—');
+    return;
+  }
+
+  const pure_etoh = vol * (abv / 100);
+  const theoretical = (pure_etoh * (eff / 100)) / (tgt / 100);
+
+  document.getElementById('wy_pure_etoh').textContent = pure_etoh.toFixed(2) + ' L';
+  document.getElementById('wy_theoretical').textContent = theoretical.toFixed(2) + ' L';
+
+  if (!isNaN(actual) && actual > 0) {
+    const actual_eff = (actual / theoretical * 100);
+    document.getElementById('wy_actual_group').style.display = '';
+    document.getElementById('wy_efficiency_group').style.display = '';
+    document.getElementById('wy_actual_display').textContent = actual.toFixed(2) + ' L';
+    document.getElementById('wy_efficiency_display').textContent = actual_eff.toFixed(1) + '%';
+  } else {
+    document.getElementById('wy_actual_group').style.display = 'none';
+    document.getElementById('wy_efficiency_group').style.display = 'none';
+  }
+}
+</script>
+{% endblock %}
+
+{% block page_help %}
+<h6>Proofing / Dilution</h6>
+<p>Based on the Pearce equation with a contraction correction. Alcohol-water mixtures contract on mixing (up to ~3.5% at 50% ABV). Always verify the final proof with a certified alcoholmeter at 60°F / 15.6°C for TTB/HMRC compliance.</p>
+<h6>Hydrometer Correction</h6>
+<p>Spirit hydrometers read true proof at 60°F. Above 60°F the spirit expands, making it appear weaker; below 60°F it appears stronger. Apply the correction before recording a proof statement.</p>
+<h6>Wash Yield</h6>
+<p>Compares the alcohol in the wash to the theoretical maximum spirits volume at a target cut strength. Still efficiency accounts for losses to foreshots, still holdup, and unrecovered tails.</p>
+<h6>TTB Age Statement Note</h6>
+<p>A "Straight" designation (e.g. Straight Bourbon Whiskey) requires a minimum of 2 years aging in new charred oak. The age statement must reflect calendar time from fill date to bottling date. Use the Barrel Registry age tracker to monitor fill date and proof.</p>
+{% endblock %}

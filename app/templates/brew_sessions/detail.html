@@ -622,6 +622,218 @@
 </div>
 {% endif %}
 
+{% set is_spirits = session.craft == 'spirits' or (session.recipe and session.recipe.craft == 'spirits') %}
+{% if is_spirits %}
+<!-- Still Run Log -->
+<div class="card mb-4">
+  <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-thermometer-half me-1"></i>Still Run Log</span>
+    <button class="btn btn-sm btn-brew" data-bs-toggle="modal" data-bs-target="#addRunModal">
+      <i class="bi bi-plus-lg me-1"></i>Log Run
+    </button>
+  </div>
+
+  {% if session.still_runs %}
+  <div class="card-body p-0">
+    {% for run in session.still_runs %}
+    {% set charge_etoh = (run.charge_volume_l or 0) * (run.charge_abv or 0) / 100 %}
+    {% set hearts_cuts = run.cuts | selectattr('cut_type', 'equalto', 'hearts') | list %}
+    {% set hearts_etoh = namespace(v=0) %}
+    {% set total_etoh = namespace(v=0) %}
+    {% for c in run.cuts %}
+      {% set avg_abv = ((c.start_abv or 0) + (c.end_abv or 0)) / 2 if (c.start_abv or c.end_abv) else 0 %}
+      {% set cut_etoh = (c.volume_l or 0) * avg_abv / 100 %}
+      {% set total_etoh.v = total_etoh.v + cut_etoh %}
+      {% if c.cut_type == 'hearts' %}{% set hearts_etoh.v = hearts_etoh.v + cut_etoh %}{% endif %}
+    {% endfor %}
+
+    <div class="border-bottom p-3">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <div>
+          <span class="fw-semibold">Run #{{ run.run_number }}</span>
+          <span class="badge bg-secondary ms-2">{{ run.still_type | title }}</span>
+          {% if run.run_date %}<span class="text-muted ms-2 small">{{ run.run_date.strftime('%Y-%m-%d') }}</span>{% endif %}
+          {% if run.charge_volume_l or run.charge_abv %}
+          <div class="small text-muted">
+            Charge: {{ run.charge_volume_l }}L @ {{ run.charge_abv }}% ABV
+            {% if charge_etoh > 0 %} · {{ "%.2f"|format(charge_etoh) }} L pure EtOH{% endif %}
+          </div>
+          {% endif %}
+          {% if run.notes %}<div class="small text-muted fst-italic">{{ run.notes }}</div>{% endif %}
+        </div>
+        <div class="d-flex gap-2 align-items-start">
+          {% if charge_etoh > 0 and total_etoh.v > 0 %}
+          <div class="text-end small me-2">
+            <div class="text-muted">Hearts EtOH</div>
+            <div class="fw-semibold">{{ "%.2f"|format(hearts_etoh.v) }} L ({{ "%.0f"|format(hearts_etoh.v / charge_etoh * 100) }}%)</div>
+            <div class="text-muted">Still eff.</div>
+            <div class="fw-semibold">{{ "%.1f"|format(total_etoh.v / charge_etoh * 100) }}%</div>
+          </div>
+          {% endif %}
+          <form method="post" action="/brew-sessions/{{ session.id }}/still-runs/{{ run.id }}/delete"
+                onsubmit="return confirm('Delete Run #{{ run.run_number }} and all its cuts?')">
+            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+          </form>
+        </div>
+      </div>
+
+      {% if run.cuts %}
+      <div class="table-responsive mb-2">
+        <table class="table table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Cut</th>
+              <th class="text-end">Volume (L)</th>
+              <th class="text-end">Start ABV</th>
+              <th class="text-end">End ABV</th>
+              <th class="text-end">Avg ABV</th>
+              <th>Sensory</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in run.cuts %}
+            {% set avg = ((c.start_abv or 0) + (c.end_abv or 0)) / 2 if (c.start_abv or c.end_abv) else None %}
+            <tr class="{% if c.cut_type == 'hearts' %}table-success{% elif c.cut_type == 'foreshots' %}table-danger{% elif c.cut_type == 'heads' %}table-warning{% endif %}">
+              <td class="fw-semibold text-capitalize">{{ c.cut_type }}</td>
+              <td class="text-end">{{ "%.2f"|format(c.volume_l) if c.volume_l else '—' }}</td>
+              <td class="text-end">{{ "%.1f"|format(c.start_abv) + '%' if c.start_abv else '—' }}</td>
+              <td class="text-end">{{ "%.1f"|format(c.end_abv) + '%' if c.end_abv else '—' }}</td>
+              <td class="text-end">{{ "%.1f"|format(avg) + '%' if avg else '—' }}</td>
+              <td class="small">
+                {% if c.aroma or c.flavor or c.finish or c.appearance %}
+                <a class="text-decoration-none" data-bs-toggle="collapse" href="#sensory-{{ c.id }}">
+                  <i class="bi bi-chat-text me-1"></i>Notes
+                </a>
+                {% else %}—{% endif %}
+              </td>
+              <td class="text-end">
+                <form method="post"
+                      action="/brew-sessions/{{ session.id }}/still-runs/{{ run.id }}/cuts/{{ c.id }}/delete"
+                      class="d-inline" onsubmit="return confirm('Delete this cut?')">
+                  <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-1"><i class="bi bi-trash"></i></button>
+                </form>
+              </td>
+            </tr>
+            {% if c.aroma or c.flavor or c.finish or c.appearance or c.overall_notes %}
+            <tr class="collapse" id="sensory-{{ c.id }}">
+              <td colspan="7" class="bg-body-secondary">
+                <div class="row g-2 small p-1">
+                  {% if c.appearance %}<div class="col-md-3"><span class="text-muted">Appearance:</span> {{ c.appearance }}</div>{% endif %}
+                  {% if c.aroma %}<div class="col-md-3"><span class="text-muted">Aroma:</span> {{ c.aroma }}</div>{% endif %}
+                  {% if c.flavor %}<div class="col-md-3"><span class="text-muted">Flavor:</span> {{ c.flavor }}</div>{% endif %}
+                  {% if c.finish %}<div class="col-md-3"><span class="text-muted">Finish:</span> {{ c.finish }}</div>{% endif %}
+                  {% if c.overall_notes %}<div class="col-12"><span class="text-muted">Notes:</span> {{ c.overall_notes }}</div>{% endif %}
+                </div>
+              </td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+
+      <!-- Add cut form -->
+      <form method="post" action="/brew-sessions/{{ session.id }}/still-runs/{{ run.id }}/cuts"
+            class="mt-2">
+        <div class="row g-2 align-items-end">
+          <div class="col-md-2">
+            <label class="form-label form-label-sm">Cut type</label>
+            <select name="cut_type" class="form-select form-select-sm">
+              <option value="foreshots">Foreshots</option>
+              <option value="heads">Heads</option>
+              <option value="hearts" selected>Hearts</option>
+              <option value="tails">Tails</option>
+            </select>
+          </div>
+          <div class="col-md-1">
+            <label class="form-label form-label-sm">Vol (L)</label>
+            <input type="number" name="volume_l" class="form-control form-control-sm" step="0.05" min="0" placeholder="e.g. 2">
+          </div>
+          <div class="col-md-1">
+            <label class="form-label form-label-sm">Start ABV</label>
+            <input type="number" name="start_abv" class="form-control form-control-sm" step="0.5" min="0" max="96" placeholder="e.g. 75">
+          </div>
+          <div class="col-md-1">
+            <label class="form-label form-label-sm">End ABV</label>
+            <input type="number" name="end_abv" class="form-control form-control-sm" step="0.5" min="0" max="96" placeholder="e.g. 60">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label form-label-sm">Appearance</label>
+            <input type="text" name="appearance" class="form-control form-control-sm" placeholder="clear, hazy…">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label form-label-sm">Aroma</label>
+            <input type="text" name="aroma" class="form-control form-control-sm" placeholder="fruity, solvent…">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label form-label-sm">Flavor / Finish</label>
+            <input type="text" name="flavor" class="form-control form-control-sm" placeholder="sweet, oily…">
+          </div>
+          <div class="col-md-1">
+            <button type="submit" class="btn btn-sm btn-brew w-100">Add</button>
+          </div>
+        </div>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card-body text-center text-muted py-4">
+    <i class="bi bi-thermometer fs-2 d-block mb-2"></i>No still runs logged yet.
+  </div>
+  {% endif %}
+</div>
+
+<!-- Log Run Modal -->
+<div class="modal fade" id="addRunModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="/brew-sessions/{{ session.id }}/still-runs">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-thermometer-half me-2"></i>Log Still Run</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-6">
+              <label class="form-label">Run Date</label>
+              <input type="date" name="run_date" class="form-control" value="{{ now_iso[:10] }}">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Still Type</label>
+              <select name="still_type" class="form-select">
+                <option value="pot">Pot Still</option>
+                <option value="column">Column Still</option>
+                <option value="reflux">Reflux Still</option>
+                <option value="alembic">Alembic</option>
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Charge Volume (L)</label>
+              <input type="number" name="charge_volume_l" class="form-control" step="0.5" min="0" placeholder="e.g. 100">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Charge ABV (%)</label>
+              <input type="number" name="charge_abv" class="form-control" step="0.1" min="0" max="100" placeholder="e.g. 8.5">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Notes</label>
+              <textarea name="notes" class="form-control" rows="2" placeholder="Stripping run, spirit run…"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-brew">Log Run</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <!-- Barrel Aging -->
 <div class="card mb-4">
   <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
@@ -634,15 +846,31 @@
   <div class="card-body p-0">
     {% for record in session.barrel_aging_records %}
     <div class="border-bottom p-3">
+      {% set age_days = (now_dt - record.start_date).days %}
+      {% set age_years = (age_days // 365) %}
+      {% set age_rem_days = (age_days % 365) %}
+      {% set is_straight = age_days >= 730 %}
       <div class="d-flex justify-content-between align-items-start mb-2">
         <div>
           <strong>{{ record.barrel.name }}</strong>
           <span class="text-muted ms-2 small">
             {{ record.barrel.wood_type or '' }}{% if record.barrel.previous_contents %} · {{ record.barrel.previous_contents }}{% endif %}
           </span>
+          {% if record.fill_proof %}
+          <span class="badge bg-secondary ms-2">Fill: {{ record.fill_proof }}°Pf</span>
+          {% endif %}
+          {% if record.disposition and record.disposition != 'aging' %}
+          <span class="badge bg-warning text-dark ms-1 text-capitalize">{{ record.disposition }}</span>
+          {% endif %}
           <br>
           <small class="text-muted">
             Started {{ record.start_date.strftime('%Y-%m-%d') }}
+            · <strong>Age: {{ age_years }}yr {{ age_rem_days }}d</strong>
+            {% if is_spirits %}
+            · <span class="{% if is_straight %}text-success fw-semibold{% else %}text-warning{% endif %}">
+              {% if is_straight %}✓ Straight (≥ 2yr){% else %}{{ 730 - age_days }}d to straight{% endif %}
+            </span>
+            {% endif %}
             {% if record.end_date %} · Ended {{ record.end_date.strftime('%Y-%m-%d') }}
             {% elif record.target_days %} · Target {{ record.target_days }} days
             {% endif %}
@@ -808,6 +1036,83 @@
         </div>
       </form>
       {% endif %}
+
+      <!-- Barrel Disposition Log (spirits-relevant for all crafts) -->
+      <details class="mt-3">
+        <summary class="small fw-semibold text-muted" style="cursor:pointer;">
+          <i class="bi bi-box-arrow-right me-1"></i>Disposition Log
+          {% if record.disposition_entries %}({{ record.disposition_entries | length }}){% endif %}
+        </summary>
+        <div class="mt-2">
+          {% if record.disposition_entries %}
+          <div class="table-responsive mb-2">
+            <table class="table table-sm mb-0">
+              <thead><tr><th>Date</th><th>Action</th><th class="text-end">Proof</th><th class="text-end">Volume</th><th>Destination</th><th>Notes</th><th></th></tr></thead>
+              <tbody>
+                {% for de in record.disposition_entries %}
+                <tr>
+                  <td>{{ de.event_date.strftime('%Y-%m-%d') }}</td>
+                  <td class="text-capitalize">{{ de.action }}</td>
+                  <td class="text-end">{{ "%.1f"|format(de.proof_at_action) + '°Pf' if de.proof_at_action else '—' }}</td>
+                  <td class="text-end">{{ "%.1f"|format(de.volume_l) + ' L' if de.volume_l else '—' }}</td>
+                  <td><small>{{ de.destination or '—' }}</small></td>
+                  <td><small class="text-muted">{{ de.notes or '' }}</small></td>
+                  <td class="text-end">
+                    <form method="post"
+                          action="/brew-sessions/{{ session.id }}/barrel-aging/{{ record.id }}/disposition/{{ de.id }}/delete"
+                          class="d-inline" onsubmit="return confirm('Delete this entry?')">
+                      <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-1"><i class="bi bi-trash"></i></button>
+                    </form>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% endif %}
+          <form method="post" action="/brew-sessions/{{ session.id }}/barrel-aging/{{ record.id }}/disposition">
+            <div class="row g-2 align-items-end">
+              <div class="col-md-2">
+                <label class="form-label form-label-sm">Date</label>
+                <input type="date" name="event_date" class="form-control form-control-sm"
+                       value="{{ now_iso[:10] }}">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label form-label-sm">Action</label>
+                <select name="action" class="form-select form-select-sm">
+                  <option value="proof check">Proof check</option>
+                  <option value="sampled">Sampled</option>
+                  <option value="topped up">Topped up</option>
+                  <option value="bottled">Bottled</option>
+                  <option value="dumped">Dumped</option>
+                  <option value="re-casked">Re-casked</option>
+                  <option value="blended">Blended</option>
+                  <option value="sold">Sold</option>
+                </select>
+              </div>
+              <div class="col-md-1">
+                <label class="form-label form-label-sm">Proof (°Pf)</label>
+                <input type="number" name="proof_at_action" class="form-control form-control-sm" step="0.1" placeholder="e.g. 110">
+              </div>
+              <div class="col-md-1">
+                <label class="form-label form-label-sm">Volume (L)</label>
+                <input type="number" name="volume_l" class="form-control form-control-sm" step="0.1" placeholder="e.g. 18">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label form-label-sm">Destination</label>
+                <input type="text" name="destination" class="form-control form-control-sm" placeholder="Bottle batch, blend tank…">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label form-label-sm">Notes</label>
+                <input type="text" name="notes" class="form-control form-control-sm" placeholder="Optional">
+              </div>
+              <div class="col-md-1">
+                <button type="submit" class="btn btn-sm btn-brew w-100">Log</button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </details>
     </div>
     {% endfor %}
   </div>
@@ -896,6 +1201,16 @@
             </div>
           </div>
 
+          <div class="row g-2 mb-3">
+            <div class="col-md-4">
+              <label class="form-label">Fill Proof <span class="text-muted small">(spirits, optional)</span></label>
+              <div class="input-group">
+                <input type="number" name="fill_proof" class="form-control" step="0.1" min="0" max="200"
+                       placeholder="e.g. 125">
+                <span class="input-group-text">°Pf</span>
+              </div>
+            </div>
+          </div>
           <div class="mb-3">
             <label class="form-label">Notes</label>
             <textarea name="notes" class="form-control" rows="2"></textarea>

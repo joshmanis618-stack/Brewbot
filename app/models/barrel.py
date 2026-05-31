@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Float, Text, Boolean, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Float, Text, Boolean, ForeignKey, DateTime, Date
 from sqlalchemy.orm import relationship
 from .base import Base
 
@@ -72,6 +72,9 @@ class BarrelAgingRecord(Base):
     target_55gal_months = Column(Float, nullable=True)  # planned equivalent 55-gal aging depth
     notes = Column(Text)
 
+    fill_proof = Column(Float, nullable=True)         # proof at fill (ABV × 2, US standard)
+    disposition = Column(String(30), default='aging')  # aging, dumped, bottled, re-casked, blended
+
     barrel = relationship("Barrel", back_populates="aging_records")
     session = relationship("BrewSession", back_populates="barrel_aging_records")
     entries = relationship(
@@ -79,6 +82,12 @@ class BarrelAgingRecord(Base):
         back_populates="record",
         cascade="all, delete-orphan",
         order_by="BarrelAgingEntry.recorded_at",
+    )
+    disposition_entries = relationship(
+        "BarrelDispositionEntry",
+        back_populates="record",
+        cascade="all, delete-orphan",
+        order_by="BarrelDispositionEntry.event_date",
     )
 
 
@@ -95,3 +104,18 @@ class BarrelAgingEntry(Base):
     notes = Column(Text)
 
     record = relationship("BarrelAgingRecord", back_populates="entries")
+
+
+class BarrelDispositionEntry(Base):
+    __tablename__ = "barrel_disposition_entries"
+
+    id = Column(Integer, primary_key=True)
+    record_id = Column(Integer, ForeignKey("barrel_aging_records.id"), nullable=False)
+    event_date = Column(DateTime, default=datetime.utcnow, nullable=False)
+    action = Column(String(50), nullable=False)  # dumped, bottled, re-casked, blended, sampled, proof check
+    proof_at_action = Column(Float, nullable=True)
+    volume_l = Column(Float, nullable=True)
+    destination = Column(String(200), nullable=True)
+    notes = Column(Text, nullable=True)
+
+    record = relationship("BarrelAgingRecord", back_populates="disposition_entries")
