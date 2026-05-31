@@ -23,3 +23,4 @@ class Hop(Base):
     substitutes = Column(Text)
 
     stock_qty = Column(Float, nullable=True, default=0.0)
+    cost_per_kg = Column(Float, nullable=True)

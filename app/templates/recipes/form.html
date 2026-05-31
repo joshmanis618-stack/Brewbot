@@ -383,7 +383,7 @@
             </tbody>
           </table>
         </div>
-        <div class="text-center text-muted py-3 small {{ 'd-none' if recipe and recipe.hops }}">
+        <div id="hops-empty" class="text-center text-muted py-3 small {{ 'd-none' if recipe and recipe.hops }}">
           No hops added yet
         </div>
       </div>
@@ -429,7 +429,7 @@
             </tbody>
           </table>
         </div>
-        <div class="text-center text-muted py-3 small {{ 'd-none' if recipe and recipe.yeasts }}">
+        <div id="yeasts-empty" class="text-center text-muted py-3 small {{ 'd-none' if recipe and recipe.yeasts }}">
           No yeast added yet
         </div>
       </div>
@@ -1185,6 +1185,150 @@ document.body.addEventListener('htmx:afterSwap', () => {
   if (brewUnits === 'imperial') syncUnitLabels();
   recalculate();
 });
+
+// ── AI fill handler ───────────────────────────────────────────────────────────
+function aiFillSelectByText(sel, text) {
+  var lower = (text || '').toLowerCase();
+  // Exact word match first, then partial
+  for (var pass = 0; pass < 2; pass++) {
+    for (var i = 0; i < sel.options.length; i++) {
+      var optText = sel.options[i].text.toLowerCase();
+      if (pass === 0 ? optText.startsWith(lower) : optText.includes(lower)) {
+        sel.value = sel.options[i].value;
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+async function aiFetchRow(type, idx) {
+  var resp = await fetch('/htmx/row/' + type + '?index=' + idx);
+  var html = await resp.text();
+  var tbodyId = type + 's-tbody';
+  var tbody = document.getElementById(tbodyId);
+  if (!tbody) return false;
+  // Hide empty-state placeholder
+  var empty = document.getElementById(tbodyId.replace('-tbody', '-empty'));
+  if (empty) empty.classList.add('d-none');
+  tbody.insertAdjacentHTML('beforeend', html);
+  return true;
+}
+
+window.aiApplyFill = async function(fill) {
+  async function ensureIngredient(payload) {
+    try {
+      var r = await fetch('/ingredients/ensure', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      });
+      var d = await r.json();
+      return d.id || null;
+    } catch(e) { return null; }
+  }
+
+  // Clear rows for types being filled
+  var clearMap = {
+    fermentable: fill.fermentables,
+    hop: fill.hops,
+    yeast: fill.yeasts,
+    mash_step: fill.mash_steps
+  };
+  Object.keys(clearMap).forEach(function(type) {
+    if (!clearMap[type] || !clearMap[type].length) return;
+    var tbody = document.getElementById(type + 's-tbody');
+    if (tbody) {
+      tbody.querySelectorAll('[data-row-type="' + type + '"]').forEach(function(r) { r.remove(); });
+      _rowCounters[type] = 0;
+    }
+    var empty = document.getElementById(type + 's-empty');
+    if (empty) empty.classList.remove('d-none');
+  });
+
+  // Simple scalar fields
+  var simple = fill.simple || {};
+  Object.keys(simple).forEach(function(k) {
+    var el = document.getElementById(k) || document.querySelector('[name="' + k + '"]');
+    if (el) el.value = simple[k];
+  });
+
+  // Fermentables
+  for (var i = 0; i < (fill.fermentables || []).length; i++) {
+    var item = fill.fermentables[i];
+    var ingId = await ensureIngredient({
+      category: 'fermentable', name: item.name,
+      fermentable_type: item.fermentable_type || item.type || 'Grain',
+      color_srm: item.color_srm, potential: item.potential, yield_pct: item.yield_pct
+    });
+    if (_rowCounters['fermentable'] === undefined) _rowCounters['fermentable'] = 0;
+    var idx = _rowCounters['fermentable']++;
+    var ok = await aiFetchRow('fermentable', idx);
+    if (!ok) continue;
+    var sel = document.querySelector('[name="fermentable_id_' + idx + '"]');
+    if (sel) {
+      if (ingId) sel.value = ingId; else aiFillSelectByText(sel, item.name);
+      fermentableSelected(sel);
+    }
+    var amt = document.querySelector('[name="amount_kg_' + idx + '"]');
+    if (amt && item.amount_kg != null) amt.value = item.amount_kg;
+  }
+
+  // Hops
+  for (var i = 0; i < (fill.hops || []).length; i++) {
+    var item = fill.hops[i];
+    var ingId = await ensureIngredient({
+      category: 'hop', name: item.name,
+      alpha_pct: item.alpha_pct, hop_type: item.hop_type || item.type
+    });
+    if (_rowCounters['hop'] === undefined) _rowCounters['hop'] = 0;
+    var idx = _rowCounters['hop']++;
+    var ok = await aiFetchRow('hop', idx);
+    if (!ok) continue;
+    var sel = document.querySelector('[name="hop_id_' + idx + '"]');
+    if (sel) { if (ingId) sel.value = ingId; else aiFillSelectByText(sel, item.name); }
+    var amt = document.querySelector('[name="hop_amount_g_' + idx + '"]');
+    if (amt && item.amount_g != null) amt.value = item.amount_g;
+    var time = document.querySelector('[name="time_min_' + idx + '"]');
+    if (time && item.time_min != null) time.value = item.time_min;
+    var use = document.querySelector('[name="hop_use_' + idx + '"]');
+    if (use && item.use) use.value = item.use;
+  }
+
+  // Yeasts
+  for (var i = 0; i < (fill.yeasts || []).length; i++) {
+    var item = fill.yeasts[i];
+    var ingId = await ensureIngredient({
+      category: 'yeast', name: item.name,
+      lab: item.lab, yeast_type: item.yeast_type || item.type,
+      form: item.form, attenuation_pct: item.attenuation_pct
+    });
+    if (_rowCounters['yeast'] === undefined) _rowCounters['yeast'] = 0;
+    var idx = _rowCounters['yeast']++;
+    var ok = await aiFetchRow('yeast', idx);
+    if (!ok) continue;
+    var sel = document.querySelector('[name="yeast_id_' + idx + '"]');
+    if (sel) { if (ingId) sel.value = ingId; else aiFillSelectByText(sel, item.name); }
+    var amt = document.querySelector('[name="yeast_amount_' + idx + '"]');
+    if (amt && item.amount_packets != null) amt.value = item.amount_packets;
+  }
+
+  // Mash steps
+  for (var i = 0; i < (fill.mash_steps || []).length; i++) {
+    var item = fill.mash_steps[i];
+    if (_rowCounters['mash_step'] === undefined) _rowCounters['mash_step'] = 0;
+    var idx = _rowCounters['mash_step']++;
+    var ok = await aiFetchRow('mash_step', idx);
+    if (!ok) continue;
+    var nameEl = document.querySelector('[name="mash_name_' + idx + '"]');
+    if (nameEl && item.name) nameEl.value = item.name;
+    var temp = document.querySelector('[name="mash_temp_c_' + idx + '"]');
+    if (temp && item.temp_c != null) temp.value = item.temp_c;
+    var dur = document.querySelector('[name="mash_time_min_' + idx + '"]');
+    if (dur && item.duration_min != null) dur.value = item.duration_min;
+  }
+
+  if (window.recalculate) recalculate();
+};
 </script>
 {% endblock %}
 

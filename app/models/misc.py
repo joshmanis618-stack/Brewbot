@@ -14,3 +14,4 @@ class Misc(Base):
 
     stock_qty = Column(Float, nullable=True, default=0.0)
     stock_unit = Column(String(10), nullable=True, default="g")
+    cost_per_unit = Column(Float, nullable=True)

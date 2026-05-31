@@ -17,6 +17,7 @@ from .mash_step import MashStep
 from .wine import WineMLFEntry, WineFiningEntry
 from .spirits import StillRun, StillCut
 from .session_production import SessionDryHop, PackagingEntry
+from .settings import AppSettings
 
 __all__ = [
     "Base",
@@ -54,4 +55,5 @@ __all__ = [
     "StillCut",
     "SessionDryHop",
     "PackagingEntry",
+    "AppSettings",
 ]

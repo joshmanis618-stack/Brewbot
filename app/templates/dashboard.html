@@ -2,150 +2,285 @@
 {% block title %}Dashboard — Brewbot{% endblock %}
 
 {% block content %}
-<div class="page-header">
-  <h1><i class="bi bi-speedometer2 me-2 text-warning"></i>Dashboard</h1>
-  {% if active_sessions %}
-  <span class="badge bg-success fs-6 px-3 py-2">
-    <i class="bi bi-play-circle me-1"></i>{{ active_sessions|length }} Active Session{{ 's' if active_sessions|length != 1 }}
-  </span>
+<div class="page-header d-flex justify-content-between align-items-center mb-3">
+  <h1 class="mb-0"><i class="bi bi-speedometer2 me-2 text-warning"></i>Dashboard</h1>
+  <div class="d-flex gap-2">
+    <a href="/calendar" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-calendar3 me-1"></i>Calendar
+    </a>
+    <a href="/brew-sessions/new" class="btn btn-brew btn-sm">
+      <i class="bi bi-plus-lg me-1"></i>New Session
+    </a>
+  </div>
+</div>
+
+<div class="row g-4">
+
+  <!-- ── Active Fermentations ──────────────────────────────────────────────── -->
+  <div class="col-12">
+    <div class="section-title">Active Fermentations</div>
+    {% if fermentation_cards %}
+    <div class="row g-3">
+      {% for fc in fermentation_cards %}
+      {% set s = fc.session %}
+      {% set r = fc.last_reading %}
+      <div class="col-md-6 col-xl-4">
+        <a href="/brew-sessions/{{ s.id }}" class="text-decoration-none">
+          <div class="card h-100 border-start border-4
+            {% if s.status == 'fermenting' %}border-info
+            {% elif s.status == 'brewing' %}border-warning
+            {% else %}border-success{% endif %}">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-start mb-2">
+                <span class="badge
+                  {% if s.status == 'fermenting' %}bg-info
+                  {% elif s.status == 'brewing' %}bg-warning text-dark
+                  {% else %}bg-success{% endif %}">
+                  {{ s.status|title }}
+                </span>
+                <small class="text-muted">#{{ s.id }}</small>
+              </div>
+              <h6 class="mb-2 text-body">{{ s.recipe.name if s.recipe else 'Unknown' }}</h6>
+              <div class="row g-2 text-center">
+                <div class="col-4">
+                  <div class="small text-muted">Last Gravity</div>
+                  <div class="fw-bold">{{ "%.3f"|format(r.gravity) if r and r.gravity else '—' }}</div>
+                </div>
+                <div class="col-4">
+                  <div class="small text-muted">Temp °C</div>
+                  <div class="fw-bold">{{ "%.1f"|format(r.temperature_c) if r and r.temperature_c else '—' }}</div>
+                </div>
+                <div class="col-4">
+                  <div class="small text-muted">Trend</div>
+                  <div class="fw-bold">
+                    {% if fc.trend == 'dropping' %}<span class="text-success">↓ Drop</span>
+                    {% elif fc.trend == 'rising' %}<span class="text-danger">↑ Rise</span>
+                    {% elif fc.trend == 'stable' %}<span class="text-secondary">→ Stable</span>
+                    {% else %}—{% endif %}
+                  </div>
+                </div>
+              </div>
+              {% if r %}
+              <div class="mt-2 small text-muted">Last: {{ r.recorded_at.strftime('%Y-%m-%d %H:%M') }}</div>
+              {% endif %}
+            </div>
+          </div>
+        </a>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="card mb-2">
+      <div class="card-body text-center text-muted py-3">
+        <i class="bi bi-graph-up me-2"></i>No active fermentations.
+        <a href="/brew-sessions/new" class="ms-2">Start a session →</a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- ── Barrel Aging ──────────────────────────────────────────────────────── -->
+  {% if barrel_cards %}
+  <div class="col-12">
+    <div class="section-title">Barrel Aging</div>
+    <div class="row g-3">
+      {% for bc in barrel_cards %}
+      {% set rec = bc.record %}
+      <div class="col-md-6 col-xl-3">
+        <div class="card h-100">
+          <div class="card-body">
+            <div class="fw-semibold mb-1">{{ rec.barrel.name if rec.barrel else 'Barrel' }}</div>
+            <div class="small text-muted mb-2">
+              {{ rec.session.recipe.name if rec.session and rec.session.recipe else '' }}
+            </div>
+            {% if bc.target_days %}
+            <div class="progress mb-2" style="height:6px;">
+              <div class="progress-bar bg-warning" style="width:{{ bc.pct|round|int }}%;"></div>
+            </div>
+            <div class="d-flex justify-content-between small">
+              <span class="text-muted">{{ bc.days_in }}d in</span>
+              {% if bc.days_left > 0 %}
+              <span class="text-warning fw-semibold">{{ bc.days_left }}d left</span>
+              {% else %}
+              <span class="text-success fw-semibold">✓ Ready</span>
+              {% endif %}
+            </div>
+            {% else %}
+            <div class="small text-muted">{{ bc.days_in }} days in barrel</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
   {% endif %}
-</div>
 
-{% if active_sessions %}
-<!-- Active Brew Sessions Banner -->
-<div class="row g-3 mb-4">
-  {% for session in active_sessions %}
-  <div class="col-md-6 col-xl-4">
-    <div class="card border-success">
-      <div class="card-body">
-        <div class="d-flex align-items-center justify-content-between mb-2">
-          <span class="badge bg-success">{{ session.status|title }}</span>
-          <small class="text-muted">Session #{{ session.id }}</small>
-        </div>
-        <h5 class="card-title mb-1">{{ session.recipe.name if session.recipe else "Unknown Recipe" }}</h5>
-        {% if session.actual_og %}
-        <small class="text-muted">OG {{ "%.3f"|format(session.actual_og) }}</small>
-        {% endif %}
+  <!-- ── Upcoming Events ───────────────────────────────────────────────────── -->
+  {% if upcoming_sessions %}
+  <div class="col-md-6">
+    <div class="section-title">Upcoming Brew Days <small class="text-muted fw-normal">(next 14 days)</small></div>
+    <div class="card">
+      <ul class="list-group list-group-flush">
+        {% for s in upcoming_sessions %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <div>
+            <a href="/brew-sessions/{{ s.id }}" class="fw-semibold text-body text-decoration-none">
+              {{ s.recipe.name if s.recipe else '#' + s.id|string }}
+            </a>
+          </div>
+          <span class="badge bg-warning text-dark">
+            <i class="bi bi-calendar3 me-1"></i>{{ s.brew_date.strftime('%b %d') }}
+          </span>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ── Low Stock Alerts ──────────────────────────────────────────────────── -->
+  {% set all_low = low_stock.fermentables + low_stock.hops + low_stock.yeasts + low_stock.miscs %}
+  {% if all_low %}
+  <div class="col-md-{{ '6' if upcoming_sessions else '12' }}">
+    <div class="section-title">
+      <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>Low Stock
+    </div>
+    <div class="card">
+      <ul class="list-group list-group-flush">
+        {% for f in low_stock.fermentables %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-layers me-1 text-muted"></i>{{ f.name }}</span>
+          <span class="badge {{ 'bg-danger' if f.stock_qty == 0 else 'bg-warning text-dark' }}">
+            {{ f.stock_qty }}kg
+          </span>
+        </li>
+        {% endfor %}
+        {% for h in low_stock.hops %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-flower1 me-1 text-muted"></i>{{ h.name }}</span>
+          <span class="badge {{ 'bg-danger' if h.stock_qty == 0 else 'bg-warning text-dark' }}">
+            {{ h.stock_qty }}g
+          </span>
+        </li>
+        {% endfor %}
+        {% for y in low_stock.yeasts %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-virus me-1 text-muted"></i>{{ y.name }}</span>
+          <span class="badge {{ 'bg-danger' if y.stock_qty == 0 else 'bg-warning text-dark' }}">
+            {{ y.stock_qty }} {{ y.stock_unit or 'pkg' }}
+          </span>
+        </li>
+        {% endfor %}
+        {% for m in low_stock.miscs %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-droplet me-1 text-muted"></i>{{ m.name }}</span>
+          <span class="badge {{ 'bg-danger' if m.stock_qty == 0 else 'bg-warning text-dark' }}">
+            {{ m.stock_qty }}{{ m.stock_unit or 'g' }}
+          </span>
+        </li>
+        {% endfor %}
+      </ul>
+      <div class="card-footer small text-muted d-flex justify-content-between">
+        <span>Thresholds: grain &lt;1kg · hops &lt;50g · yeast &lt;1pkg · misc &lt;50g</span>
+        <a href="/inventory">Manage inventory →</a>
       </div>
     </div>
   </div>
-  {% endfor %}
-</div>
-{% endif %}
+  {% endif %}
 
-<!-- Live Controller Readings -->
-<div class="section-title">Live Controller</div>
-{% if devices %}
-<div class="row g-3 mb-4">
-  {% for device in devices %}
-  <div class="col-6 col-sm-4 col-md-3 col-xl-2">
-    <div class="device-tile h-100" data-device-key="{{ device.device_key }}">
-      <div class="d-flex justify-content-between align-items-start mb-2">
-        <span class="status-dot {{ 'online' if device.is_online else 'offline' }}"></span>
-        <small class="text-muted" style="font-size:0.7rem;">{{ device.type|replace('_',' ')|title }}</small>
+  <!-- ── Live Controller ───────────────────────────────────────────────────── -->
+  <div class="col-12">
+    <div class="section-title">Live Controller</div>
+    {% if devices %}
+    <div class="row g-3">
+      {% for device in devices %}
+      <div class="col-6 col-sm-4 col-md-3 col-xl-2">
+        <div class="device-tile h-100" data-device-key="{{ device.device_key }}">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <span class="status-dot {{ 'online' if device.is_online else 'offline' }}"></span>
+            <small class="text-muted" style="font-size:0.7rem;">{{ device.type|replace('_',' ')|title }}</small>
+          </div>
+          {% if device.type == 'temperature_sensor' %}
+            <div class="device-value">{{ "%.1f"|format(device.current_value) if device.current_value is not none else "—" }}</div>
+            <div class="device-unit">°{{ device.current_unit or 'C' }}</div>
+          {% elif device.type in ['heater','pump','valve','gas_solenoid'] %}
+            <div class="mt-2 d-flex gap-2">
+              <button class="btn btn-sm btn-success flex-fill" onclick="sendCommand({{ device.id }}, 'on')">
+                <i class="bi bi-toggle-on"></i> ON
+              </button>
+              <button class="btn btn-sm btn-secondary flex-fill" onclick="sendCommand({{ device.id }}, 'off')">
+                <i class="bi bi-toggle-off"></i> OFF
+              </button>
+            </div>
+          {% else %}
+            <div class="device-value" style="font-size:1.5rem;">{{ device.current_value if device.current_value is not none else "—" }}</div>
+          {% endif %}
+          <div class="device-name mt-2">{{ device.name }}</div>
+          {% if device.role %}<div class="device-role">{{ device.role|replace('_',' ') }}</div>{% endif %}
+        </div>
       </div>
-
-      {% if device.type == 'temperature_sensor' %}
-        <div class="device-value">
-          {{ "%.1f"|format(device.current_value) if device.current_value is not none else "—" }}
-        </div>
-        <div class="device-unit">°{{ device.current_unit or 'C' }}</div>
-
-      {% elif device.type in ['heater','pump','valve','gas_solenoid'] %}
-        <div class="mt-2 d-flex gap-2">
-          <button class="btn btn-sm btn-success flex-fill"
-                  onclick="sendCommand({{ device.id }}, 'on')">
-            <i class="bi bi-toggle-on"></i> ON
-          </button>
-          <button class="btn btn-sm btn-secondary flex-fill"
-                  onclick="sendCommand({{ device.id }}, 'off')">
-            <i class="bi bi-toggle-off"></i> OFF
-          </button>
-        </div>
-
-      {% else %}
-        <div class="device-value" style="font-size:1.5rem;">
-          {{ device.current_value if device.current_value is not none else "—" }}
-        </div>
-      {% endif %}
-
-      <div class="device-name mt-2">{{ device.name }}</div>
-      {% if device.role %}
-      <div class="device-role">{{ device.role|replace('_',' ') }}</div>
-      {% endif %}
+      {% endfor %}
     </div>
+    {% else %}
+    <div class="card">
+      <div class="empty-state">
+        <i class="bi bi-cpu text-muted"></i>
+        <p class="mb-1 fw-semibold">No controller devices yet</p>
+        <p class="small text-muted mb-3">Connect a Raspberry Pi or ESP32 running the Brewbot controller script.</p>
+        <a href="/devices" class="btn btn-brew btn-sm">Set up Controller</a>
+      </div>
+    </div>
+    {% endif %}
   </div>
-  {% endfor %}
-</div>
-{% else %}
-<div class="card mb-4">
-  <div class="empty-state">
-    <i class="bi bi-cpu text-muted"></i>
-    <p class="mb-1 fw-semibold">No controller devices yet</p>
-    <p class="small text-muted mb-3">Connect a Raspberry Pi or ESP32 running the Brewbot controller script.</p>
-    <a href="/devices" class="btn btn-brew btn-sm">Set up Controller</a>
-  </div>
-</div>
-{% endif %}
 
-<!-- Recent Recipes -->
-<div class="section-title">Recent Recipes</div>
-{% if recent_recipes %}
-<div class="row g-3">
-  {% for recipe in recent_recipes %}
-  <div class="col-sm-6 col-lg-4 col-xl-3">
-    <a href="/recipes/{{ recipe.id }}" class="text-decoration-none">
-      <div class="card recipe-card h-100">
-        <div class="card-body">
-          <div class="d-flex align-items-center gap-2 mb-2">
-            {% if recipe.color_srm %}
-            <span class="srm-chip" data-srm="{{ recipe.color_srm }}"></span>
-            {% endif %}
-            <span class="badge bg-secondary">{{ recipe.type }}</span>
-          </div>
-          <h6 class="card-title text-body mb-3">{{ recipe.name }}</h6>
-          <div class="row g-2 text-center">
-            {% if recipe.abv %}
-            <div class="col-4">
-              <div class="stat-label">ABV</div>
-              <div class="stat-val text-body">{{ "%.1f"|format(recipe.abv) }}%</div>
-            </div>
-            {% endif %}
-            {% if recipe.ibu %}
-            <div class="col-4">
-              <div class="stat-label">IBU</div>
-              <div class="stat-val text-body">{{ recipe.ibu|int }}</div>
-            </div>
-            {% endif %}
-            <div class="col-4">
-              <div class="stat-label">Batch</div>
-              <div class="stat-val text-body">{{ recipe.batch_size_l }}L</div>
+  <!-- ── Recent Recipes ────────────────────────────────────────────────────── -->
+  <div class="col-12">
+    <div class="section-title">Recent Recipes</div>
+    {% if recent_recipes %}
+    <div class="row g-3">
+      {% for recipe in recent_recipes %}
+      <div class="col-sm-6 col-lg-4 col-xl-3">
+        <a href="/recipes/{{ recipe.id }}" class="text-decoration-none">
+          <div class="card recipe-card h-100">
+            <div class="card-body">
+              <div class="d-flex align-items-center gap-2 mb-2">
+                {% if recipe.color_srm %}<span class="srm-chip" data-srm="{{ recipe.color_srm }}"></span>{% endif %}
+                <span class="badge bg-secondary">{{ recipe.type }}</span>
+              </div>
+              <h6 class="card-title text-body mb-3">{{ recipe.name }}</h6>
+              <div class="row g-2 text-center">
+                {% if recipe.abv %}<div class="col-4"><div class="stat-label">ABV</div><div class="stat-val text-body">{{ "%.1f"|format(recipe.abv) }}%</div></div>{% endif %}
+                {% if recipe.ibu %}<div class="col-4"><div class="stat-label">IBU</div><div class="stat-val text-body">{{ recipe.ibu|int }}</div></div>{% endif %}
+                <div class="col-4"><div class="stat-label">Batch</div><div class="stat-val text-body">{{ recipe.batch_size_l }}L</div></div>
+              </div>
             </div>
           </div>
-        </div>
+        </a>
       </div>
-    </a>
-  </div>
-  {% endfor %}
-  <div class="col-sm-6 col-lg-4 col-xl-3">
-    <a href="/recipes/new" class="text-decoration-none h-100 d-block">
-      <div class="card h-100 border-dashed d-flex align-items-center justify-content-center" style="border-style:dashed; min-height:130px;">
-        <div class="text-center text-muted py-3">
-          <i class="bi bi-plus-circle fs-3 d-block mb-1"></i>
-          <small>New Recipe</small>
-        </div>
+      {% endfor %}
+      <div class="col-sm-6 col-lg-4 col-xl-3">
+        <a href="/recipes/new" class="text-decoration-none h-100 d-block">
+          <div class="card h-100 d-flex align-items-center justify-content-center" style="border-style:dashed;min-height:130px;">
+            <div class="text-center text-muted py-3">
+              <i class="bi bi-plus-circle fs-3 d-block mb-1"></i>
+              <small>New Recipe</small>
+            </div>
+          </div>
+        </a>
       </div>
-    </a>
+    </div>
+    {% else %}
+    <div class="card">
+      <div class="empty-state">
+        <i class="bi bi-journal-plus text-muted"></i>
+        <p class="mb-1 fw-semibold">No recipes yet</p>
+        <p class="small text-muted mb-3">Add your first recipe to get started.</p>
+        <a href="/recipes/new" class="btn btn-brew btn-sm">Create Recipe</a>
+      </div>
+    </div>
+    {% endif %}
   </div>
+
 </div>
-{% else %}
-<div class="card">
-  <div class="empty-state">
-    <i class="bi bi-journal-plus text-muted"></i>
-    <p class="mb-1 fw-semibold">No recipes yet</p>
-    <p class="small text-muted mb-3">Add your first recipe to get started.</p>
-    <a href="/recipes/new" class="btn btn-brew btn-sm">Create Recipe</a>
-  </div>
-</div>
-{% endif %}
 {% endblock %}

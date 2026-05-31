@@ -6,6 +6,13 @@
   <h1><i class="bi bi-gear me-2"></i>Settings</h1>
 </div>
 
+{% if saved == 'ai' %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+  AI assistant settings saved.
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
 {% if imported %}
 <div class="alert alert-success alert-dismissible fade show" role="alert">
   <strong>Import complete.</strong>
@@ -82,6 +89,73 @@
     </div>
   </div>
 </div>
+<!-- AI Assistant Settings -->
+<div class="card mb-4">
+  <div class="card-header fw-semibold"><i class="bi bi-robot me-2"></i>AI Assistant</div>
+  <div class="card-body">
+    <p class="text-muted mb-3">Configure the floating AI chat assistant. Supports any OpenAI-compatible endpoint (Ollama, LM Studio, vLLM, etc.) or Anthropic directly.</p>
+    <form method="post" action="/settings/ai">
+      <div class="row g-3 mb-3">
+        <div class="col-md-4">
+          <label class="form-label">Provider</label>
+          <select name="ai_provider" class="form-select" id="aiProviderSelect" onchange="toggleAiFields()">
+            <option value="openai_compatible" {% if ai_provider == 'openai_compatible' %}selected{% endif %}>OpenAI-compatible (Ollama, LM Studio, etc.)</option>
+            <option value="anthropic" {% if ai_provider == 'anthropic' %}selected{% endif %}>Anthropic (Claude)</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Model name</label>
+          <input type="text" name="ai_model" class="form-control" value="{{ ai_model }}"
+                 placeholder="e.g. llama3, mistral, claude-opus-4-7">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">API Key <span class="text-muted small">(optional for local)</span></label>
+          <input type="password" name="ai_api_key" class="form-control" value="{{ ai_api_key }}"
+                 placeholder="sk-... or leave blank">
+        </div>
+        <div class="col-md-8" id="aiBaseUrlRow">
+          <label class="form-label">Base URL</label>
+          <input type="text" name="ai_base_url" class="form-control" value="{{ ai_base_url }}"
+                 placeholder="http://localhost:11434/v1">
+          <div class="form-text">Ollama default: <code>http://localhost:11434/v1</code> · LM Studio: <code>http://localhost:1234/v1</code></div>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-brew">
+        <i class="bi bi-check-lg me-1"></i>Save AI Settings
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- Data Export -->
+<div class="card mb-4">
+  <div class="card-header fw-semibold"><i class="bi bi-file-earmark-spreadsheet me-2"></i>Data Export (CSV)</div>
+  <div class="card-body">
+    <p class="text-muted mb-3">Export operational data for analysis, compliance, or lab records.</p>
+    <div class="d-flex gap-3 flex-wrap">
+      <a href="/export/sessions.csv" class="btn btn-outline-secondary">
+        <i class="bi bi-download me-1"></i>Sessions
+      </a>
+      <a href="/export/fermentation-readings.csv" class="btn btn-outline-secondary">
+        <i class="bi bi-download me-1"></i>Fermentation Readings
+      </a>
+      <a href="/export/barrel-entries.csv" class="btn btn-outline-secondary">
+        <i class="bi bi-download me-1"></i>Barrel Tasting Entries
+      </a>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleAiFields() {
+  const provider = document.getElementById('aiProviderSelect').value;
+  document.getElementById('aiBaseUrlRow').style.display = provider === 'anthropic' ? 'none' : '';
+}
+toggleAiFields();
+</script>
 {% endblock %}
 
 {% block page_help %}

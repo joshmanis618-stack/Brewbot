@@ -1073,6 +1073,61 @@
   </div>
 </div>
 
+{% if batch_cost %}
+<!-- Batch Cost -->
+<div class="card mb-4">
+  <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-currency-dollar me-1"></i>Batch Cost</span>
+    <span class="fw-bold text-warning">${{ '%.2f'|format(batch_cost.total) }}</span>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Ingredient</th>
+            <th>Category</th>
+            <th class="text-end">Amount</th>
+            <th class="text-end">Cost</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in batch_cost.items %}
+          <tr>
+            <td>{{ item.name }}</td>
+            <td><small class="text-muted">{{ item.category }}</small></td>
+            <td class="text-end"><small>{{ item.amount }}</small></td>
+            <td class="text-end">${{ '%.2f'|format(item.cost) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot class="fw-semibold border-top">
+          <tr>
+            <td colspan="3" class="text-end">Total</td>
+            <td class="text-end text-warning">${{ '%.2f'|format(batch_cost.total) }}</td>
+          </tr>
+          {% if batch_cost.cost_per_l %}
+          <tr class="text-muted">
+            <td colspan="3" class="text-end small">Per litre ({{ batch_cost.batch_size_l }}L batch)</td>
+            <td class="text-end small">${{ '%.2f'|format(batch_cost.cost_per_l) }}/L</td>
+          </tr>
+          {% endif %}
+          {% if batch_cost.cost_per_vessel %}
+          <tr class="text-muted">
+            <td colspan="3" class="text-end small">Per vessel ({{ batch_cost.vessel_count }} vessels)</td>
+            <td class="text-end small">${{ '%.2f'|format(batch_cost.cost_per_vessel) }}</td>
+          </tr>
+          {% endif %}
+        </tfoot>
+      </table>
+    </div>
+  </div>
+  <div class="card-footer small text-muted">
+    Costs calculated from recipe ingredient amounts × ingredient cost/unit. Add cost fields to ingredients in the <a href="/ingredients">Ingredient Library</a>.
+  </div>
+</div>
+{% endif %}
+
 <!-- Barrel Aging -->
 <div class="card mb-4">
   <div class="card-header fw-semibold d-flex justify-content-between align-items-center">

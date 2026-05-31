@@ -23,10 +23,16 @@ from app.models.user import User
 from app.models.barrel import Barrel, BarrelAgingRecord, BarrelAgingEntry, BarrelDispositionEntry
 from app.models.spirits import StillRun, StillCut
 from app.models.session_production import SessionDryHop, PackagingEntry
+from app.models.settings import AppSettings
+from app.models.fermentation_reading import FermentationReading as _FR
 from app.models.grape_variety import GrapeVariety, RecipeGrape
 from app.models.mash_step import MashStep
 from app.models.wine import WineMLFEntry, WineFiningEntry
 import json
+import csv
+import io
+from datetime import timedelta
+from fastapi.responses import JSONResponse, StreamingResponse
 from app.services import backup as backup_service
 from app.services import beerxml as beerxml_service
 from app.services import calc as calc_service
@@ -239,14 +245,100 @@ def _parse_ingredients(form):
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
+def _get_setting(db: Session, key: str, default: str = "") -> str:
+    s = db.get(AppSettings, key)
+    return s.value if s and s.value else default
+
+
+def _set_setting(db: Session, key: str, value: str):
+    s = db.get(AppSettings, key)
+    if s:
+        s.value = value
+    else:
+        db.add(AppSettings(key=key, value=value))
+
+
 @router.get("/", response_class=HTMLResponse)
 def dashboard(request: Request, db: Session = Depends(get_db)):
+    from datetime import date as date_type
+
+    # Active fermentations with last two gravity readings for trend
+    active = db.query(BrewSession).options(
+        selectinload(BrewSession.recipe),
+        selectinload(BrewSession.fermentation_readings),
+    ).filter(BrewSession.status.in_(["brewing", "fermenting", "conditioning"])).all()
+
+    fermentation_cards = []
+    for s in active:
+        readings = sorted(s.fermentation_readings, key=lambda r: r.recorded_at)
+        last = readings[-1] if readings else None
+        prev = readings[-2] if len(readings) >= 2 else None
+        trend = None
+        if last and prev and last.gravity and prev.gravity:
+            diff = last.gravity - prev.gravity
+            trend = "stable" if abs(diff) < 0.001 else ("dropping" if diff < 0 else "rising")
+        fermentation_cards.append({
+            "session": s,
+            "last_reading": last,
+            "trend": trend,
+        })
+
+    # Barrel aging — active records with targets
+    from app.models.barrel import BarrelAgingRecord as _BAR
+    barrel_cards = []
+    barrel_records = db.query(_BAR).options(
+        selectinload(_BAR.barrel), selectinload(_BAR.session).selectinload(BrewSession.recipe)
+    ).filter(_BAR.end_date.is_(None)).all()
+    now_dt = datetime.utcnow()
+    for rec in barrel_records:
+        days_in = (now_dt - rec.start_date).days
+        target_days = rec.target_days
+        if not target_days and rec.target_55gal_months and rec.barrel and rec.barrel.aging_multiplier:
+            target_days = round(rec.target_55gal_months * 30 / rec.barrel.aging_multiplier)
+        barrel_cards.append({
+            "record": rec,
+            "days_in": days_in,
+            "target_days": target_days,
+            "days_left": max(0, target_days - days_in) if target_days else None,
+            "pct": min(100, days_in / target_days * 100) if target_days else None,
+        })
+
+    # Upcoming events (next 14 days)
+    today = now_dt.date()
+    horizon = today + timedelta(days=14)
+    upcoming_sessions = db.query(BrewSession).options(selectinload(BrewSession.recipe)).filter(
+        BrewSession.brew_date >= datetime.combine(today, datetime.min.time()),
+        BrewSession.brew_date <= datetime.combine(horizon, datetime.max.time()),
+        BrewSession.status == "planned",
+    ).order_by(BrewSession.brew_date).all()
+
+    # Low-stock alerts (thresholds: grain <1 kg, hops <50g, yeast <1 pkg, misc <50g)
+    low_fermentables = db.query(Fermentable).filter(
+        Fermentable.stock_qty.isnot(None), Fermentable.stock_qty < 1.0, Fermentable.stock_qty >= 0
+    ).order_by(Fermentable.stock_qty).limit(5).all()
+    low_hops = db.query(Hop).filter(
+        Hop.stock_qty.isnot(None), Hop.stock_qty < 50.0, Hop.stock_qty >= 0
+    ).order_by(Hop.stock_qty).limit(5).all()
+    low_yeasts = db.query(Yeast).filter(
+        Yeast.stock_qty.isnot(None), Yeast.stock_qty < 1.0, Yeast.stock_qty >= 0
+    ).order_by(Yeast.stock_qty).limit(5).all()
+    low_miscs = db.query(Misc).filter(
+        Misc.stock_qty.isnot(None), Misc.stock_qty < 50.0, Misc.stock_qty >= 0
+    ).order_by(Misc.stock_qty).limit(5).all()
+
     return templates.TemplateResponse(request, "dashboard.html", {
         "devices": db.query(Device).order_by(Device.role).all(),
         "recent_recipes": db.query(Recipe).order_by(Recipe.created_at.desc()).limit(6).all(),
-        "active_sessions": db.query(BrewSession).filter(
-            BrewSession.status.in_(["brewing", "fermenting", "conditioning"])
-        ).all(),
+        "active_sessions": active,
+        "fermentation_cards": fermentation_cards,
+        "barrel_cards": barrel_cards,
+        "upcoming_sessions": upcoming_sessions,
+        "low_stock": {
+            "fermentables": low_fermentables,
+            "hops": low_hops,
+            "yeasts": low_yeasts,
+            "miscs": low_miscs,
+        },
         "page": "dashboard",
     })
 
@@ -667,6 +759,58 @@ def _in_use_error(name: str, tab: str) -> RedirectResponse:
     return RedirectResponse(f"/ingredients?tab={tab}&error={msg}", status_code=303)
 
 
+@router.post("/ingredients/ensure")
+async def ensure_ingredient(request: Request, db: Session = Depends(get_db)):
+    """Find ingredient by name (case-insensitive partial match) or create it. Returns {id}."""
+    body = await request.json()
+    category = body.get("category", "")
+    name = (body.get("name") or "").strip()
+    if not category or not name:
+        return JSONResponse({"error": "category and name required"}, status_code=400)
+
+    def _find(model, name_col):
+        exact = db.query(model).filter(func.lower(name_col) == name.lower()).first()
+        if exact:
+            return exact
+        return db.query(model).filter(func.lower(name_col).contains(name.lower())).first()
+
+    if category == "fermentable":
+        obj = _find(Fermentable, Fermentable.name)
+        if not obj:
+            obj = Fermentable(
+                name=name,
+                type=body.get("fermentable_type", "Grain"),
+                color_srm=float(body["color_srm"]) if body.get("color_srm") else 2.0,
+                potential=float(body["potential"]) if body.get("potential") else 1.037,
+                yield_pct=float(body["yield_pct"]) if body.get("yield_pct") else 75.0,
+            )
+            db.add(obj); db.commit(); db.refresh(obj)
+    elif category == "hop":
+        obj = _find(Hop, Hop.name)
+        if not obj:
+            obj = Hop(
+                name=name,
+                alpha_pct=float(body["alpha_pct"]) if body.get("alpha_pct") else 10.0,
+                type=body.get("hop_type"),
+            )
+            db.add(obj); db.commit(); db.refresh(obj)
+    elif category == "yeast":
+        obj = _find(Yeast, Yeast.name)
+        if not obj:
+            obj = Yeast(
+                name=name,
+                lab=body.get("lab"),
+                type=body.get("yeast_type"),
+                form=body.get("form", "Dry"),
+                attenuation_pct=float(body["attenuation_pct"]) if body.get("attenuation_pct") else 75.0,
+            )
+            db.add(obj); db.commit(); db.refresh(obj)
+    else:
+        return JSONResponse({"error": f"unknown category: {category}"}, status_code=400)
+
+    return JSONResponse({"id": obj.id})
+
+
 # Fermentables
 @router.post("/ingredients/fermentables/create")
 async def fermentable_create(request: Request, db: Session = Depends(get_db)):
@@ -679,6 +823,7 @@ async def fermentable_create(request: Request, db: Session = Depends(get_db)):
         yield_pct=float(form.get("yield_pct") or 75),
         recommend_mash=form.get("recommend_mash") == "1",
         notes=form.get("notes") or None,
+        cost_per_kg=float(form["cost_per_kg"]) if form.get("cost_per_kg") else None,
     ))
     db.commit()
     return RedirectResponse("/ingredients?tab=fermentables", status_code=303)
@@ -697,6 +842,7 @@ async def fermentable_update(item_id: int, request: Request, db: Session = Depen
     item.yield_pct = float(form.get("yield_pct") or 75)
     item.recommend_mash = form.get("recommend_mash") == "1"
     item.notes = form.get("notes") or None
+    item.cost_per_kg = float(form["cost_per_kg"]) if form.get("cost_per_kg") else None
     db.commit()
     return RedirectResponse("/ingredients?tab=fermentables", status_code=303)
 
@@ -723,6 +869,7 @@ async def hop_create(request: Request, db: Session = Depends(get_db)):
         beta_pct=float(form.get("beta_pct")) if form.get("beta_pct") else None,
         notes=form.get("notes") or None,
         substitutes=form.get("substitutes") or None,
+        cost_per_kg=float(form["cost_per_kg"]) if form.get("cost_per_kg") else None,
     ))
     db.commit()
     return RedirectResponse("/ingredients?tab=hops", status_code=303)
@@ -740,6 +887,7 @@ async def hop_update(item_id: int, request: Request, db: Session = Depends(get_d
     item.beta_pct = float(form.get("beta_pct")) if form.get("beta_pct") else None
     item.notes = form.get("notes") or None
     item.substitutes = form.get("substitutes") or None
+    item.cost_per_kg = float(form["cost_per_kg"]) if form.get("cost_per_kg") else None
     db.commit()
     return RedirectResponse("/ingredients?tab=hops", status_code=303)
 
@@ -769,6 +917,7 @@ async def yeast_create(request: Request, db: Session = Depends(get_db)):
         flocculation=form.get("flocculation") or None,
         best_for=form.get("best_for") or None,
         notes=form.get("notes") or None,
+        cost_per_pkg=float(form["cost_per_pkg"]) if form.get("cost_per_pkg") else None,
     ))
     db.commit()
     return RedirectResponse("/ingredients?tab=yeasts", status_code=303)
@@ -789,6 +938,7 @@ async def yeast_update(item_id: int, request: Request, db: Session = Depends(get
     item.flocculation = form.get("flocculation") or None
     item.best_for = form.get("best_for") or None
     item.notes = form.get("notes") or None
+    item.cost_per_pkg = float(form["cost_per_pkg"]) if form.get("cost_per_pkg") else None
     db.commit()
     return RedirectResponse("/ingredients?tab=yeasts", status_code=303)
 
@@ -812,6 +962,7 @@ async def misc_create(request: Request, db: Session = Depends(get_db)):
         name=form["name"], type=form.get("type") or None,
         use_for=form.get("use_for") or None,
         notes=form.get("notes") or None,
+        cost_per_unit=float(form["cost_per_unit"]) if form.get("cost_per_unit") else None,
     ))
     db.commit()
     return RedirectResponse("/ingredients?tab=miscs", status_code=303)
@@ -826,6 +977,7 @@ async def misc_update(item_id: int, request: Request, db: Session = Depends(get_
     item.name = form["name"]; item.type = form.get("type") or None
     item.use_for = form.get("use_for") or None
     item.notes = form.get("notes") or None
+    item.cost_per_unit = float(form["cost_per_unit"]) if form.get("cost_per_unit") else None
     db.commit()
     return RedirectResponse("/ingredients?tab=miscs", status_code=303)
 
@@ -1188,8 +1340,15 @@ def brew_program_step_delete(program_id: int, step_id: int, db: Session = Depend
 # ── Settings / backup ────────────────────────────────────────────────────────
 
 @router.get("/settings", response_class=HTMLResponse)
-def settings_page(request: Request):
-    return templates.TemplateResponse(request, "settings.html", {"page": "settings"})
+def settings_page(request: Request, saved: str = "", db: Session = Depends(get_db)):
+    return templates.TemplateResponse(request, "settings.html", {
+        "page": "settings",
+        "saved": saved,
+        "ai_provider": _get_setting(db, "ai_provider", "openai_compatible"),
+        "ai_model": _get_setting(db, "ai_model", ""),
+        "ai_api_key": _get_setting(db, "ai_api_key", ""),
+        "ai_base_url": _get_setting(db, "ai_base_url", "http://localhost:11434/v1"),
+    })
 
 
 @router.get("/settings/export/json")
@@ -1549,12 +1708,54 @@ def brew_session_detail(session_id: int, request: Request, db: Session = Depends
     now_iso = now_dt.strftime("%Y-%m-%dT%H:%M")
     barrels = db.query(Barrel).filter(Barrel.is_active == True).order_by(Barrel.name).all()
 
+    batch_cost = None
+    recipe = session.recipe
+    if recipe:
+        cost_items = []
+        total = 0.0
+        for rf in recipe.fermentables:
+            if rf.fermentable and rf.fermentable.cost_per_kg:
+                c = rf.amount_kg * rf.fermentable.cost_per_kg
+                cost_items.append({"name": rf.fermentable.name, "category": "Fermentable",
+                                   "amount": f"{rf.amount_kg:.2f} kg", "cost": c})
+                total += c
+        for rh in recipe.hops:
+            if rh.hop and rh.hop.cost_per_kg:
+                c = (rh.amount_g / 1000.0) * rh.hop.cost_per_kg
+                cost_items.append({"name": rh.hop.name, "category": "Hop",
+                                   "amount": f"{rh.amount_g:.0f} g", "cost": c})
+                total += c
+        for ry in recipe.yeasts:
+            if ry.yeast and ry.yeast.cost_per_pkg:
+                c = ry.amount * ry.yeast.cost_per_pkg
+                cost_items.append({"name": ry.yeast.name, "category": "Yeast",
+                                   "amount": f"{ry.amount:.0f} pkg", "cost": c})
+                total += c
+        for rm in recipe.miscs:
+            if rm.misc and rm.misc.cost_per_unit:
+                c = rm.amount * rm.misc.cost_per_unit
+                cost_items.append({"name": rm.misc.name, "category": "Misc",
+                                   "amount": f"{rm.amount:.0f}", "cost": c})
+                total += c
+        if cost_items:
+            batch_size = session.actual_batch_size_l or recipe.batch_size_l
+            pkg_count = session.packaging_entries[-1].vessel_count if session.packaging_entries else None
+            batch_cost = {
+                "items": cost_items,
+                "total": total,
+                "batch_size_l": batch_size,
+                "cost_per_l": total / batch_size if batch_size else None,
+                "vessel_count": pkg_count,
+                "cost_per_vessel": total / pkg_count if pkg_count else None,
+            }
+
     return templates.TemplateResponse(request, "brew_sessions/detail.html", {
         "session": session,
         "readings_json": json.dumps(readings_data),
         "now_iso": now_iso,
         "now_dt": now_dt,
         "barrels": barrels,
+        "batch_cost": batch_cost,
         "page": "brew_sessions",
     })
 
@@ -2046,6 +2247,209 @@ def packaging_delete(session_id: int, entry_id: int, db: Session = Depends(get_d
         db.delete(entry)
         db.commit()
     return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+
+
+# ── Production calendar ───────────────────────────────────────────────────────
+
+@router.get("/calendar", response_class=HTMLResponse)
+def production_calendar(request: Request, db: Session = Depends(get_db)):
+    from app.models.barrel import BarrelAgingRecord as _BAR2
+    sessions = db.query(BrewSession).options(selectinload(BrewSession.recipe)).all()
+    barrel_records = db.query(_BAR2).options(
+        selectinload(_BAR2.barrel), selectinload(_BAR2.session).selectinload(BrewSession.recipe)
+    ).all()
+
+    events = []
+    for s in sessions:
+        name = s.recipe.name if s.recipe else f"Session #{s.id}"
+        if s.brew_date:
+            events.append({"title": f"Brew: {name}", "start": s.brew_date.strftime("%Y-%m-%d"),
+                           "color": "#f59e0b", "url": f"/brew-sessions/{s.id}", "extendedProps": {"type": "brew"}})
+        if s.package_date:
+            events.append({"title": f"Package: {name}", "start": s.package_date.strftime("%Y-%m-%d"),
+                           "color": "#10b981", "url": f"/brew-sessions/{s.id}", "extendedProps": {"type": "package"}})
+        if s.crush_date:
+            events.append({"title": f"Crush: {name}", "start": s.crush_date.strftime("%Y-%m-%d"),
+                           "color": "#8b5cf6", "url": f"/brew-sessions/{s.id}", "extendedProps": {"type": "crush"}})
+
+    for rec in barrel_records:
+        barrel_name = rec.barrel.name if rec.barrel else "Barrel"
+        session_name = rec.session.recipe.name if rec.session and rec.session.recipe else ""
+        label = f"{barrel_name}" + (f" ({session_name})" if session_name else "")
+        if rec.start_date:
+            events.append({"title": f"Fill: {label}", "start": rec.start_date.strftime("%Y-%m-%d"),
+                           "color": "#92400e", "extendedProps": {"type": "barrel_fill"}})
+        if rec.end_date:
+            events.append({"title": f"Barrel Out: {label}", "start": rec.end_date.strftime("%Y-%m-%d"),
+                           "color": "#d97706", "extendedProps": {"type": "barrel_out"}})
+        elif rec.target_days and rec.start_date:
+            from datetime import timedelta as _td
+            target_date = rec.start_date + _td(days=rec.target_days)
+            events.append({"title": f"Target: {label}", "start": target_date.strftime("%Y-%m-%d"),
+                           "color": "#d97706", "extendedProps": {"type": "barrel_target"}})
+
+    return templates.TemplateResponse(request, "calendar.html", {
+        "events_json": json.dumps(events),
+        "page": "calendar",
+    })
+
+
+# ── Data export ────────────────────────────────────────────────────────────────
+
+def _csv_response(filename: str, headers: list, rows: list) -> StreamingResponse:
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(headers)
+    w.writerows(rows)
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/export/sessions.csv")
+def export_sessions_csv(db: Session = Depends(get_db)):
+    sessions = db.query(BrewSession).options(selectinload(BrewSession.recipe)).order_by(BrewSession.id).all()
+    rows = []
+    for s in sessions:
+        rows.append([
+            s.id, s.recipe.name if s.recipe else "", s.status, s.craft or "",
+            s.brew_date.strftime("%Y-%m-%d") if s.brew_date else "",
+            s.package_date.strftime("%Y-%m-%d") if s.package_date else "",
+            s.actual_og or "", s.actual_fg or "", s.actual_abv or "",
+            s.actual_batch_size_l or "", s.actual_efficiency or "",
+            (s.notes or "").replace("\n", " "),
+        ])
+    return _csv_response("sessions.csv",
+        ["ID", "Recipe", "Status", "Craft", "Brew Date", "Package Date",
+         "OG", "FG", "ABV%", "Batch L", "Efficiency%", "Notes"], rows)
+
+
+@router.get("/export/fermentation-readings.csv")
+def export_fermentation_csv(db: Session = Depends(get_db)):
+    readings = db.query(FermentationReading).options(
+        selectinload(FermentationReading.session).selectinload(BrewSession.recipe)
+    ).order_by(FermentationReading.session_id, FermentationReading.recorded_at).all()
+    rows = [[
+        r.id, r.session_id,
+        r.session.recipe.name if r.session and r.session.recipe else "",
+        r.recorded_at.strftime("%Y-%m-%d %H:%M") if r.recorded_at else "",
+        r.gravity or "", r.temperature_c or "", r.ph or "", r.ta or "",
+        r.so2_free or "", r.so2_total or "", r.notes or "",
+    ] for r in readings]
+    return _csv_response("fermentation_readings.csv",
+        ["ID", "Session ID", "Recipe", "Recorded At", "Gravity", "Temp C",
+         "pH", "TA g/L", "Free SO2", "Total SO2", "Notes"], rows)
+
+
+@router.get("/export/barrel-entries.csv")
+def export_barrel_csv(db: Session = Depends(get_db)):
+    from app.models.barrel import BarrelAgingRecord as _BAR3, BarrelAgingEntry as _BAE
+    entries = db.query(_BAE).options(
+        selectinload(_BAE.record).selectinload(_BAR3.barrel),
+        selectinload(_BAE.record).selectinload(_BAR3.session).selectinload(BrewSession.recipe),
+    ).order_by(_BAE.record_id, _BAE.recorded_at).all()
+    rows = [[
+        e.id, e.record_id,
+        e.record.barrel.name if e.record and e.record.barrel else "",
+        e.record.session.recipe.name if e.record and e.record.session and e.record.session.recipe else "",
+        e.recorded_at.strftime("%Y-%m-%d") if e.recorded_at else "",
+        e.gravity or "", e.abv or "", e.color_srm or "",
+        e.flavor_notes or "", e.notes or "",
+    ] for e in entries]
+    return _csv_response("barrel_entries.csv",
+        ["ID", "Record ID", "Barrel", "Recipe", "Date", "Gravity", "ABV%", "SRM",
+         "Flavor Notes", "Notes"], rows)
+
+
+# ── AI chat ────────────────────────────────────────────────────────────────────
+
+@router.post("/ai/chat")
+async def ai_chat(request: Request, db: Session = Depends(get_db)):
+    import httpx
+    body = await request.json()
+    message = body.get("message", "").strip()
+    context = body.get("context", {})
+    history = body.get("history", [])  # [{role, content}, ...]
+
+    if not message:
+        return JSONResponse({"error": "Empty message"}, status_code=400)
+
+    provider = _get_setting(db, "ai_provider", "openai_compatible")
+    model = _get_setting(db, "ai_model", "")
+    api_key = _get_setting(db, "ai_api_key", "")
+    base_url = _get_setting(db, "ai_base_url", "http://localhost:11434/v1")
+
+    if not model:
+        return JSONResponse({"error": "AI model not configured — visit Settings → AI Assistant."}, status_code=503)
+
+    system = (
+        "You are a helpful brewing assistant embedded in Brewbot, a craft beverage production management system. "
+        "You help with brewing calculations, recipes, fermentation troubleshooting, and production planning. "
+        "Be concise and practical.\n\n"
+        "FORM FILL: When the user asks you to create a recipe, write a grain bill, mash schedule, hop schedule, or yeast selection, "
+        "include a JSON block at the END of your response in this exact format:\n"
+        "```json\n"
+        '{"fill": {"simple": {"name": "...", "batch_size_l": 20, "efficiency": 72}, '
+        '"fermentables": [{"name": "Pale Malt (2 Row)", "fermentable_type": "Grain", "color_srm": 2, "potential": 1.037, "yield_pct": 75, "amount_kg": 4.5}], '
+        '"hops": [{"name": "Citra", "alpha_pct": 12, "hop_type": "Bittering", "amount_g": 30, "time_min": 60, "use": "Boil"}], '
+        '"yeasts": [{"name": "Safale US-05", "lab": "Fermentis", "yeast_type": "Ale", "form": "Dry", "attenuation_pct": 77, "amount_packets": 1}], '
+        '"mash_steps": [{"name": "Single Infusion", "temp_c": 67, "duration_min": 60}]}}\n'
+        "```\n"
+        "Always include fermentable_type (Grain/Sugar/Extract/Dry Extract/Adjunct), color_srm, potential, yield_pct for fermentables. "
+        "Always include alpha_pct for hops. Always include lab, yeast_type (Ale/Lager/Wine/Champagne), form (Dry/Liquid), attenuation_pct for yeasts. "
+        "hop 'use' values: Boil, Dry Hop, First Wort, Aroma, Mash. "
+        "These properties let the system auto-create ingredients that don't exist yet. "
+        "The user will be shown a confirmation dialog before anything is applied.\n"
+    )
+    if context:
+        system += f"\nCurrent page: {context.get('title','')}, URL: {context.get('url','')}"
+        if context.get("data"):
+            system += f"\nPage context: {json.dumps(context['data'])[:1000]}"
+
+    messages = history[-10:] + [{"role": "user", "content": message}]
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, read=120.0)) as client:
+            if provider == "anthropic":
+                resp = await client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={"x-api-key": api_key, "anthropic-version": "2023-06-01",
+                             "Content-Type": "application/json"},
+                    json={"model": model, "max_tokens": 1024, "system": system, "messages": messages},
+                )
+                resp.raise_for_status()
+                text = resp.json()["content"][0]["text"]
+            else:
+                url = base_url.rstrip("/") + "/chat/completions"
+                headers = {"Content-Type": "application/json"}
+                if api_key:
+                    headers["Authorization"] = f"Bearer {api_key}"
+                resp = await client.post(url, headers=headers,
+                    json={"model": model, "messages": [{"role": "system", "content": system}] + messages})
+                resp.raise_for_status()
+                text = resp.json()["choices"][0]["message"]["content"]
+        return JSONResponse({"response": text})
+    except Exception as e:
+        return JSONResponse({"error": f"AI request failed: {str(e)[:200]}"}, status_code=502)
+
+
+@router.get("/settings/ai", response_class=HTMLResponse)
+def ai_settings_get(request: Request, db: Session = Depends(get_db)):
+    return RedirectResponse("/settings", status_code=303)
+
+
+@router.post("/settings/ai")
+async def ai_settings_post(request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    _set_setting(db, "ai_provider", form.get("ai_provider", "openai_compatible"))
+    _set_setting(db, "ai_model", form.get("ai_model", ""))
+    _set_setting(db, "ai_api_key", form.get("ai_api_key", ""))
+    _set_setting(db, "ai_base_url", form.get("ai_base_url", ""))
+    db.commit()
+    return RedirectResponse("/settings?saved=ai", status_code=303)
 
 
 # ── Shopping list ──────────────────────────────────────────────────────────────

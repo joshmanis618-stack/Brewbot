@@ -42,7 +42,7 @@
       <tr>
         <th>Name</th><th>Type</th><th>Origin</th>
         <th class="text-end">Color (SRM)</th><th class="text-end">Yield %</th>
-        <th class="text-end">Potential</th><th style="width:90px;"></th>
+        <th class="text-end">Potential</th><th class="text-end">$/kg</th><th style="width:90px;"></th>
       </tr>
     </thead>
     <tbody>
@@ -58,6 +58,7 @@
         <td class="text-end">{{ f.color_srm }}</td>
         <td class="text-end">{{ f.yield_pct }}%</td>
         <td class="text-end">{{ "%.3f"|format(f.potential) }}</td>
+        <td class="text-end">{{ '%.2f'|format(f.cost_per_kg) if f.cost_per_kg else '—' }}</td>
         <td class="text-end">
           <button class="btn btn-sm btn-outline-secondary me-1"
                   data-id="{{ f.id }}" data-name="{{ f.name|e }}"
@@ -66,6 +67,7 @@
                   data-yield="{{ f.yield_pct }}"
                   data-recommend="{{ '1' if f.recommend_mash else '0' }}"
                   data-notes="{{ f.notes|e if f.notes else '' }}"
+                  data-cost="{{ f.cost_per_kg if f.cost_per_kg else '' }}"
                   onclick="openFermentable(this.dataset)">
             <i class="bi bi-pencil"></i>
           </button>
@@ -97,7 +99,7 @@
       <tr>
         <th>Name</th><th>Type</th><th>Origin</th>
         <th class="text-end">Alpha %</th><th class="text-end">Beta %</th>
-        <th>Notes</th><th style="width:90px;"></th>
+        <th>Notes</th><th class="text-end">$/kg</th><th style="width:90px;"></th>
       </tr>
     </thead>
     <tbody>
@@ -109,6 +111,7 @@
         <td class="text-end fw-semibold text-success">{{ h.alpha_pct }}%</td>
         <td class="text-end">{{ h.beta_pct or '—' }}</td>
         <td><small class="text-muted">{{ h.notes or '—' }}</small></td>
+        <td class="text-end">{{ '%.2f'|format(h.cost_per_kg) if h.cost_per_kg else '—' }}</td>
         <td class="text-end">
           <button class="btn btn-sm btn-outline-secondary me-1"
                   data-id="{{ h.id }}" data-name="{{ h.name|e }}"
@@ -118,6 +121,7 @@
                   data-beta="{{ h.beta_pct if h.beta_pct else '' }}"
                   data-notes="{{ h.notes|e if h.notes else '' }}"
                   data-substitutes="{{ h.substitutes|e if h.substitutes else '' }}"
+                  data-cost="{{ h.cost_per_kg if h.cost_per_kg else '' }}"
                   onclick="openHop(this.dataset)">
             <i class="bi bi-pencil"></i>
           </button>
@@ -149,7 +153,7 @@
       <tr>
         <th>Name</th><th>Lab</th><th>Type</th><th>Form</th>
         <th class="text-end">Attenuation</th><th>Temp Range</th>
-        <th>Flocculation</th><th style="width:90px;"></th>
+        <th>Flocculation</th><th class="text-end">$/pkg</th><th style="width:90px;"></th>
       </tr>
     </thead>
     <tbody>
@@ -162,6 +166,7 @@
         <td class="text-end">{{ y.attenuation_pct }}%</td>
         <td>{% if y.min_temp_c and y.max_temp_c %}{{ y.min_temp_c }}–{{ y.max_temp_c }} °C{% else %}—{% endif %}</td>
         <td>{{ y.flocculation or '—' }}</td>
+        <td class="text-end">{{ '%.2f'|format(y.cost_per_pkg) if y.cost_per_pkg else '—' }}</td>
         <td class="text-end">
           <button class="btn btn-sm btn-outline-secondary me-1"
                   data-id="{{ y.id }}" data-name="{{ y.name|e }}"
@@ -175,6 +180,7 @@
                   data-flocculation="{{ y.flocculation|e if y.flocculation else '' }}"
                   data-best-for="{{ y.best_for|e if y.best_for else '' }}"
                   data-notes="{{ y.notes|e if y.notes else '' }}"
+                  data-cost="{{ y.cost_per_pkg if y.cost_per_pkg else '' }}"
                   onclick="openYeast(this.dataset)">
             <i class="bi bi-pencil"></i>
           </button>
@@ -187,7 +193,7 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="8" class="text-center text-muted py-4">No yeasts yet — click Add to get started.</td></tr>
+      <tr><td colspan="9" class="text-center text-muted py-4">No yeasts yet — click Add to get started.</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -203,7 +209,7 @@
 <div class="table-responsive">
   <table class="table table-hover ingredient-table">
     <thead>
-      <tr><th>Name</th><th>Type</th><th>Use For</th><th>Notes</th><th style="width:90px;"></th></tr>
+      <tr><th>Name</th><th>Type</th><th>Use For</th><th>Notes</th><th class="text-end">$/unit</th><th style="width:90px;"></th></tr>
     </thead>
     <tbody>
       {% for m in miscs %}
@@ -212,12 +218,14 @@
         <td>{{ m.type or '—' }}</td>
         <td>{{ m.use_for or '—' }}</td>
         <td><small class="text-muted">{{ m.notes or '—' }}</small></td>
+        <td class="text-end">{{ '%.2f'|format(m.cost_per_unit) if m.cost_per_unit else '—' }}</td>
         <td class="text-end">
           <button class="btn btn-sm btn-outline-secondary me-1"
                   data-id="{{ m.id }}" data-name="{{ m.name|e }}"
                   data-type="{{ m.type|e if m.type else '' }}"
                   data-use-for="{{ m.use_for|e if m.use_for else '' }}"
                   data-notes="{{ m.notes|e if m.notes else '' }}"
+                  data-cost="{{ m.cost_per_unit if m.cost_per_unit else '' }}"
                   onclick="openMisc(this.dataset)">
             <i class="bi bi-pencil"></i>
           </button>
@@ -230,7 +238,7 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="5" class="text-center text-muted py-4">No misc ingredients yet — click Add to get started.</td></tr>
+      <tr><td colspan="6" class="text-center text-muted py-4">No misc ingredients yet — click Add to get started.</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -290,7 +298,12 @@
                 <label class="form-check-label" for="fRecommend">Needs mash</label>
               </div>
             </div>
-            <div class="col-12">
+            <div class="col-4">
+              <label class="form-label">Cost ($/kg)</label>
+              <input type="number" name="cost_per_kg" id="fCost" class="form-control"
+                     step="0.01" min="0" placeholder="e.g. 2.50">
+            </div>
+            <div class="col-8">
               <label class="form-label">Notes</label>
               <textarea name="notes" id="fNotes" class="form-control" rows="2"></textarea>
             </div>
@@ -346,7 +359,12 @@
               <input type="text" name="substitutes" id="hSubs" class="form-control"
                      placeholder="e.g. Centennial, Columbus">
             </div>
-            <div class="col-12">
+            <div class="col-4">
+              <label class="form-label">Cost ($/kg)</label>
+              <input type="number" name="cost_per_kg" id="hCost" class="form-control"
+                     step="0.01" min="0" placeholder="e.g. 25.00">
+            </div>
+            <div class="col-8">
               <label class="form-label">Notes / Flavor Profile</label>
               <textarea name="notes" id="hNotes" class="form-control" rows="2"
                         placeholder="e.g. Citrus, floral, grapefruit"></textarea>
@@ -429,7 +447,12 @@
               <input type="text" name="best_for" id="yBestFor" class="form-control"
                      placeholder="e.g. American Ales, IPAs, Pale Ales">
             </div>
-            <div class="col-12">
+            <div class="col-4">
+              <label class="form-label">Cost ($/pkg)</label>
+              <input type="number" name="cost_per_pkg" id="yCost" class="form-control"
+                     step="0.01" min="0" placeholder="e.g. 4.50">
+            </div>
+            <div class="col-8">
               <label class="form-label">Notes</label>
               <textarea name="notes" id="yNotes" class="form-control" rows="2"></textarea>
             </div>
@@ -472,7 +495,12 @@
               <input type="text" name="use_for" id="mUseFor" class="form-control"
                      placeholder="e.g. Add 15 min before flameout for clarity">
             </div>
-            <div class="col-12">
+            <div class="col-4">
+              <label class="form-label">Cost ($/unit)</label>
+              <input type="number" name="cost_per_unit" id="mCost" class="form-control"
+                     step="0.01" min="0" placeholder="e.g. 1.20">
+            </div>
+            <div class="col-8">
               <label class="form-label">Notes</label>
               <textarea name="notes" id="mNotes" class="form-control" rows="2"></textarea>
             </div>
@@ -615,6 +643,7 @@ function openFermentable(d) {
     document.getElementById('fPotential').value = d.potential || 1.037;
     document.getElementById('fYield').value     = d.yield || 75;
     document.getElementById('fRecommend').checked = d.recommend === '1';
+    document.getElementById('fCost').value      = d.cost || '';
     document.getElementById('fNotes').value     = d.notes || '';
   } else {
     title.textContent = 'Add Fermentable';
@@ -640,6 +669,7 @@ function openHop(d) {
     document.getElementById('hAlpha').value  = d.alpha || '';
     document.getElementById('hBeta').value   = d.beta || '';
     document.getElementById('hSubs').value   = d.substitutes || '';
+    document.getElementById('hCost').value   = d.cost || '';
     document.getElementById('hNotes').value  = d.notes || '';
   } else {
     title.textContent = 'Add Hop';
@@ -665,6 +695,7 @@ function openYeast(d) {
     document.getElementById('yMinTemp').value   = d.minTemp || '';
     document.getElementById('yMaxTemp').value   = d.maxTemp || '';
     document.getElementById('yBestFor').value   = d.bestFor || '';
+    document.getElementById('yCost').value      = d.cost || '';
     document.getElementById('yNotes').value     = d.notes || '';
   } else {
     title.textContent = 'Add Yeast';
@@ -703,6 +734,7 @@ function openMisc(d) {
     document.getElementById('mName').value   = d.name || '';
     document.getElementById('mType').value   = d.type || '';
     document.getElementById('mUseFor').value = d.useFor || '';
+    document.getElementById('mCost').value   = d.cost || '';
     document.getElementById('mNotes').value  = d.notes || '';
   } else {
     title.textContent = 'Add Misc Ingredient';

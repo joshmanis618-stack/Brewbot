@@ -90,6 +90,11 @@
           </a>
         </li>
         <li class="nav-item">
+          <a class="nav-link rounded px-3 {% if page == 'calendar' %}active{% endif %}" href="/calendar">
+            <i class="bi bi-calendar3 me-1"></i>Calendar
+          </a>
+        </li>
+        <li class="nav-item">
           <a class="nav-link rounded px-3 {% if page == 'brew_programs' %}active{% endif %}" href="/brew-programs">
             <i class="bi bi-list-ol me-1"></i>Brew Programs
           </a>
@@ -173,7 +178,7 @@
   </div>
 </nav>
 
-<main class="container-fluid px-4 py-4" style="max-width: 1400px;">
+<main class="container-fluid px-4 pt-4" style="max-width: 1400px; padding-bottom: 5rem;">
   {% block content %}{% endblock %}
 </main>
 
@@ -189,6 +194,59 @@
   </div>
 </div>
 
+<!-- AI Fill confirmation modal -->
+<div class="modal fade" id="aiFillModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-robot me-2"></i>Apply AI suggestions?</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">The assistant wants to fill in the following:</p>
+        <ul id="ai-fill-summary" class="mb-3"></ul>
+        <div class="alert alert-warning py-2 small mb-0">
+          <i class="bi bi-exclamation-triangle me-1"></i>Existing values will be overwritten.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-brew" id="ai-fill-apply-btn">
+          <i class="bi bi-check-lg me-1"></i>Apply
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- AI Chat offcanvas -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="aiOffcanvas" style="width:min(420px,100vw);">
+  <div class="offcanvas-header">
+    <h5 class="offcanvas-title"><i class="bi bi-robot me-2"></i>AI Assistant</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <div class="offcanvas-body d-flex flex-column p-0" style="height:calc(100% - 3.5rem);">
+    <div id="ai-messages" class="flex-grow-1 overflow-auto p-3"></div>
+    <div class="p-3 border-top bg-body">
+      <div class="input-group">
+        <input type="text" id="ai-input" class="form-control" placeholder="Ask anything about brewing…" autocomplete="off">
+        <button class="btn btn-brew" id="ai-send-btn" onclick="aiSend()">
+          <i class="bi bi-send-fill"></i>
+        </button>
+      </div>
+      <div class="form-text mt-1 text-truncate" id="ai-context-hint"></div>
+    </div>
+  </div>
+</div>
+
+<!-- AI Chat floating button -->
+<button class="btn btn-brew rounded-circle shadow-lg position-fixed d-flex align-items-center justify-content-center"
+        style="bottom:1.5rem;right:1.5rem;width:3.25rem;height:3.25rem;z-index:1045;"
+        data-bs-toggle="offcanvas" data-bs-target="#aiOffcanvas"
+        title="AI Assistant">
+  <i class="bi bi-robot fs-5"></i>
+</button>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"></script>
 <script src="/static/js/brewbot.js"></script>
@@ -203,6 +261,178 @@ function toggleDark() {
   const t = localStorage.getItem('brewbot_theme') || 'light';
   const icon = document.getElementById('dark-icon');
   if (icon) icon.className = t === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-fill';
+})();
+</script>
+<script>
+(function() {
+  var aiHistory = [];
+  var aiFillPending = null;
+
+  // ── Message rendering ────────────────────────────────────────────────────────
+  function appendMsg(role, text, addFillBtn) {
+    var div = document.getElementById('ai-messages');
+    var wrapper = document.createElement('div');
+    wrapper.className = 'mb-2 d-flex flex-column ' + (role === 'user' ? 'align-items-end' : 'align-items-start');
+    var bubble = document.createElement('div');
+    bubble.className = 'px-3 py-2 rounded-3 ' + (role === 'user' ? 'bg-warning text-dark' : 'bg-body-secondary');
+    bubble.style.cssText = 'max-width:85%;white-space:pre-wrap;word-break:break-word;';
+    bubble.textContent = text;
+    wrapper.appendChild(bubble);
+    if (addFillBtn) {
+      var fb = document.createElement('button');
+      fb.className = 'btn btn-sm btn-outline-secondary mt-1';
+      fb.style.fontSize = '0.75rem';
+      fb.innerHTML = '<i class="bi bi-pencil-square me-1"></i>Fill form';
+      fb.addEventListener('click', function() { aiFillRequest(text, fb); });
+      wrapper.appendChild(fb);
+    }
+    div.appendChild(wrapper);
+    div.scrollTop = div.scrollHeight;
+    return bubble;
+  }
+
+  // ── JSON fill detection (used when model spontaneously includes it) ───────────
+  function extractFill(text) {
+    var m = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (m) {
+      try { var p = JSON.parse(m[1]); if (p && p.fill) return p; } catch(e) {}
+    }
+    var rawM = text.match(/\{[\s\S]*?"fill"\s*:/);
+    if (rawM) {
+      var start = text.indexOf(rawM[0]), depth = 0, end = -1;
+      for (var i = start; i < text.length; i++) {
+        if (text[i] === '{') depth++;
+        else if (text[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
+      }
+      if (end > start) {
+        try { var p = JSON.parse(text.slice(start, end + 1)); if (p && p.fill) return p; } catch(e) {}
+      }
+    }
+    return null;
+  }
+
+  function showFillConfirm(fill) {
+    aiFillPending = fill;
+    var ul = document.getElementById('ai-fill-summary');
+    ul.innerHTML = '';
+    function add(t) { var li = document.createElement('li'); li.textContent = t; ul.appendChild(li); }
+    var sKeys = Object.keys(fill.simple || {});
+    if (sKeys.length) add(sKeys.length + ' field(s): ' + sKeys.join(', '));
+    if ((fill.fermentables || []).length) add(fill.fermentables.length + ' fermentable(s)');
+    if ((fill.hops || []).length) add(fill.hops.length + ' hop addition(s)');
+    if ((fill.mash_steps || []).length) add(fill.mash_steps.length + ' mash step(s)');
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('aiFillModal')).show();
+  }
+
+  // ── "Fill form" button — makes a second focused call for JSON only ────────────
+  async function aiFillRequest(lastResponse, btn) {
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Extracting…';
+    var prompt = 'Based on your previous response, output ONLY a JSON fill block — no explanation, no extra text. Use this exact format:\n```json\n{"fill": {"simple": {"name": "...", "batch_size_l": 20, "efficiency": 72}, "fermentables": [{"name": "Pale Malt (2 Row)", "fermentable_type": "Grain", "color_srm": 2, "potential": 1.037, "yield_pct": 75, "amount_kg": 4.5}], "hops": [{"name": "Citra", "alpha_pct": 12, "hop_type": "Bittering", "amount_g": 30, "time_min": 60, "use": "Boil"}], "yeasts": [{"name": "Safale US-05", "lab": "Fermentis", "yeast_type": "Ale", "form": "Dry", "attenuation_pct": 77, "amount_packets": 1}], "mash_steps": [{"name": "Single Infusion", "temp_c": 67, "duration_min": 60}]}}\n```\nInclude fermentable_type, color_srm, potential, yield_pct for all fermentables. Include alpha_pct for all hops. Include lab, yeast_type, form, attenuation_pct for all yeasts. Only include sections that apply to what you described.';
+    try {
+      var resp = await fetch('/ai/chat', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          message: prompt,
+          history: aiHistory.slice(-10),
+          context: {title: document.title, url: window.location.href}
+        })
+      });
+      var data = await resp.json();
+      if (data.response) {
+        var parsed = extractFill(data.response);
+        if (parsed) {
+          btn.closest('.mb-2').querySelector('button.btn-outline-secondary')?.remove();
+          showFillConfirm(parsed.fill);
+          return;
+        }
+      }
+      appendMsg('assistant', '⚠ Could not extract fill data. Try asking for a specific grain bill or mash schedule.');
+    } catch(e) {
+      appendMsg('assistant', '⚠ Request failed.');
+    }
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-pencil-square me-1"></i>Fill form';
+  }
+
+  // ── Main send ────────────────────────────────────────────────────────────────
+  window.aiSend = async function() {
+    var input = document.getElementById('ai-input');
+    var btn = document.getElementById('ai-send-btn');
+    var msg = input.value.trim();
+    if (!msg) return;
+    input.value = '';
+    btn.disabled = true;
+    appendMsg('user', msg);
+    aiHistory.push({role: 'user', content: msg});
+    var thinking = appendMsg('assistant', '⏳ Thinking…');
+    try {
+      var resp = await fetch('/ai/chat', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          message: msg,
+          history: aiHistory.slice(0, -1).slice(-10),
+          context: {title: document.title, url: window.location.href}
+        })
+      });
+      var data = await resp.json();
+      if (data.response) {
+        aiHistory.push({role: 'assistant', content: data.response});
+        var parsed = extractFill(data.response);
+        if (parsed) {
+          // Model cooperated — strip JSON block from display and auto-confirm
+          thinking.textContent = data.response.replace(/```(?:json)?[\s\S]*?```/i, '').trim() || 'Ready to apply.';
+          showFillConfirm(parsed.fill);
+        } else {
+          // Model gave plain text — show Fill form button if page supports it
+          thinking.textContent = data.response;
+          var hasFill = typeof window.aiApplyFill === 'function';
+          if (hasFill) {
+            var fb = document.createElement('button');
+            fb.className = 'btn btn-sm btn-outline-secondary mt-1';
+            fb.style.fontSize = '0.75rem';
+            fb.innerHTML = '<i class="bi bi-pencil-square me-1"></i>Fill form';
+            fb.addEventListener('click', function() { aiFillRequest(data.response, fb); });
+            thinking.parentNode.appendChild(fb);
+          }
+        }
+      } else {
+        thinking.textContent = '⚠ ' + (data.error || 'No response.');
+      }
+    } catch(e) {
+      thinking.textContent = '⚠ Could not reach AI endpoint. The model may still be loading — try again in a moment.';
+    }
+    btn.disabled = false;
+    input.focus();
+  };
+
+  // ── Confirm modal apply button ───────────────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', function() {
+    var inp = document.getElementById('ai-input');
+    if (inp) inp.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); window.aiSend(); }
+    });
+
+    var canvas = document.getElementById('aiOffcanvas');
+    if (canvas) canvas.addEventListener('show.bs.offcanvas', function() {
+      var hint = document.getElementById('ai-context-hint');
+      if (hint) hint.textContent = document.title;
+    });
+
+    var applyBtn = document.getElementById('ai-fill-apply-btn');
+    if (applyBtn) applyBtn.addEventListener('click', function() {
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('aiFillModal')).hide();
+      if (!aiFillPending) return;
+      if (typeof window.aiApplyFill === 'function') {
+        window.aiApplyFill(aiFillPending);
+      } else {
+        appendMsg('assistant', '⚠ This page does not support auto-fill.');
+      }
+      aiFillPending = null;
+    });
+  });
 })();
 </script>
 {% block scripts %}{% endblock %}

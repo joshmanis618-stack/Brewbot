@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Production Calendar — Brewbot{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2 class="mb-0"><i class="bi bi-calendar3 me-2"></i>Production Calendar</h2>
+  <div class="d-flex gap-2 align-items-center flex-wrap">
+    <span class="badge" style="background:#f59e0b;">Brew</span>
+    <span class="badge" style="background:#10b981;">Package</span>
+    <span class="badge" style="background:#8b5cf6;">Crush</span>
+    <span class="badge" style="background:#92400e;">Barrel Fill</span>
+    <span class="badge" style="background:#d97706;">Barrel Target</span>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body p-3">
+    <div id="calendar"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css">
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<div id="events-data" data-events="{{ events_json | e }}" style="display:none;"></div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const raw = document.getElementById('events-data').dataset.events;
+  const events = JSON.parse(raw);
+
+  const calEl = document.getElementById('calendar');
+  const cal = new FullCalendar.Calendar(calEl, {
+    initialView: 'dayGridMonth',
+    headerToolbar: {
+      left: 'prev,next today',
+      center: 'title',
+      right: 'dayGridMonth,timeGridWeek,listMonth'
+    },
+    height: 'auto',
+    events: events,
+    eventClick: function(info) {
+      if (info.event.url) {
+        info.jsEvent.preventDefault();
+        window.location.href = info.event.url;
+      }
+    },
+    eventDidMount: function(info) {
+      info.el.title = info.event.title;
+    }
+  });
+  cal.render();
+});
+</script>
+{% endblock %}
+
+{% block page_help %}
+<h6>Production Calendar</h6>
+<p>Shows all scheduled events from your brew sessions and barrel aging records:</p>
+<ul>
+  <li><strong>Brew</strong> — session brew date (status: Planned)</li>
+  <li><strong>Package</strong> — session package date</li>
+  <li><strong>Crush</strong> — wine harvest / crush date</li>
+  <li><strong>Barrel Fill / Target</strong> — barrel aging start and projected target date</li>
+</ul>
+<p>Click any event to go to the related session. Edit dates on the Brew Sessions page.</p>
+{% endblock %}

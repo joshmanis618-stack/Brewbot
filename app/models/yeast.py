@@ -24,3 +24,4 @@ class Yeast(Base):
 
     stock_qty = Column(Float, nullable=True, default=0.0)
     stock_unit = Column(String(10), nullable=True, default="pkg")
+    cost_per_pkg = Column(Float, nullable=True)
