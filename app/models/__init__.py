@@ -16,6 +16,7 @@ from .grape_variety import GrapeVariety, RecipeGrape
 from .mash_step import MashStep
 from .wine import WineMLFEntry, WineFiningEntry
 from .spirits import StillRun, StillCut
+from .session_production import SessionDryHop, PackagingEntry
 
 __all__ = [
     "Base",
@@ -51,4 +52,6 @@ __all__ = [
     "WineFiningEntry",
     "StillRun",
     "StillCut",
+    "SessionDryHop",
+    "PackagingEntry",
 ]

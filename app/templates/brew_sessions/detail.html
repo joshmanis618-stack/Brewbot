@@ -405,6 +405,113 @@
 </div>
 {% endif %}
 
+<!-- Dry Hop Log -->
+<div class="card mb-4">
+  <div class="card-header fw-semibold">
+    <i class="bi bi-flower1 me-1"></i>Dry Hop Log
+  </div>
+  {% if session.dry_hops %}
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead>
+        <tr>
+          <th>Variety</th>
+          <th class="text-end">Total (g)</th>
+          <th class="text-end">Rate (g/L)</th>
+          <th>Vessel</th>
+          <th class="text-end">Temp (°C)</th>
+          <th>Added</th>
+          <th>Removed</th>
+          <th>Notes</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for dh in session.dry_hops %}
+        <tr>
+          <td class="fw-semibold">{{ dh.variety or (dh.hop.name if dh.hop else '—') }}</td>
+          <td class="text-end">{{ '%.0f'|format(dh.total_grams) + 'g' if dh.total_grams else '—' }}</td>
+          <td class="text-end">{{ '%.1f'|format(dh.rate_g_per_l) + ' g/L' if dh.rate_g_per_l else '—' }}</td>
+          <td><small>{{ dh.vessel or '—' }}</small></td>
+          <td class="text-end">{{ '%.1f'|format(dh.temp_c) if dh.temp_c else '—' }}</td>
+          <td>{{ dh.addition_date.strftime('%Y-%m-%d') if dh.addition_date else '—' }}</td>
+          <td>
+            {% if dh.removal_date %}{{ dh.removal_date.strftime('%Y-%m-%d') }}
+            {% elif dh.addition_date %}<span class="badge bg-info">Active</span>
+            {% else %}—{% endif %}
+          </td>
+          <td><small class="text-muted">{{ dh.notes or '' }}</small></td>
+          <td class="text-end">
+            <form method="post" action="/brew-sessions/{{ session.id }}/dry-hops/{{ dh.id }}/delete"
+                  class="d-inline" onsubmit="return confirm('Remove this dry hop entry?')">
+              <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="text-center text-muted py-3 small">No dry hop additions logged yet.</div>
+  {% endif %}
+  <div class="card-footer bg-body-secondary">
+    <div class="fw-semibold mb-2 small text-uppercase text-muted">Log Addition</div>
+    <form method="post" action="/brew-sessions/{{ session.id }}/dry-hops">
+      <div class="row g-2 align-items-end mb-2">
+        <div class="col-md-2">
+          <label class="form-label small">Variety <span class="text-danger">*</span></label>
+          <input type="text" name="variety" class="form-control form-control-sm" required
+                 placeholder="e.g. Citra, Mosaic">
+        </div>
+        <div class="col-md-1">
+          <label class="form-label small">Total (g)</label>
+          <input type="number" name="total_grams" class="form-control form-control-sm"
+                 step="1" min="0" placeholder="100">
+        </div>
+        <div class="col-md-1">
+          <label class="form-label small">Rate (g/L)</label>
+          <input type="number" name="rate_g_per_l" class="form-control form-control-sm"
+                 step="0.1" min="0" placeholder="5.0">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Vessel</label>
+          <select name="vessel" class="form-select form-select-sm">
+            <option value="">— select —</option>
+            <option value="primary">Primary</option>
+            <option value="secondary">Secondary</option>
+            <option value="dry hopper">Dry Hopper</option>
+            <option value="keg">Keg</option>
+          </select>
+        </div>
+        <div class="col-md-1">
+          <label class="form-label small">Temp (°C)</label>
+          <input type="number" name="temp_c" class="form-control form-control-sm"
+                 step="0.5" placeholder="18">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Date Added</label>
+          <input type="date" name="addition_date" class="form-control form-control-sm"
+                 value="{{ now_dt.strftime('%Y-%m-%d') }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Date Removed</label>
+          <input type="date" name="removal_date" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-1">
+          <button type="submit" class="btn btn-brew btn-sm w-100">Add</button>
+        </div>
+      </div>
+      <div class="row g-2">
+        <div class="col-12">
+          <input type="text" name="notes" class="form-control form-control-sm"
+                 placeholder="Notes (optional)">
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
 {% if is_wine %}
 <!-- MLF Tracker -->
 <div class="card mb-4">
@@ -833,6 +940,138 @@
   </div>
 </div>
 {% endif %}
+
+<!-- Packaging Log -->
+<div class="card mb-4">
+  <div class="card-header fw-semibold">
+    <i class="bi bi-box-seam me-1"></i>Packaging Log
+  </div>
+  {% if session.packaging_entries %}
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Method</th>
+          <th class="text-end">Volume (L)</th>
+          <th class="text-end">Vessels</th>
+          <th class="text-end">Carb (vol)</th>
+          <th>Priming</th>
+          <th class="text-end">CO₂ PSI</th>
+          <th class="text-end">FG</th>
+          <th>Notes</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pkg in session.packaging_entries %}
+        <tr>
+          <td>{{ pkg.package_date.strftime('%Y-%m-%d') if pkg.package_date else '—' }}</td>
+          <td class="text-capitalize">
+            {% if pkg.method == 'bottle' %}<i class="bi bi-cup-straw me-1"></i>
+            {% elif pkg.method == 'keg' %}<i class="bi bi-circle me-1"></i>
+            {% elif pkg.method == 'can' %}<i class="bi bi-cup me-1"></i>
+            {% elif pkg.method == 'cask' %}<i class="bi bi-archive me-1"></i>
+            {% endif %}
+            {{ pkg.method or '—' }}
+          </td>
+          <td class="text-end">{{ pkg.fill_volume_l or '—' }}</td>
+          <td class="text-end">{{ pkg.vessel_count or '—' }}</td>
+          <td class="text-end">{{ '%.2f'|format(pkg.carbonation_vol) + ' vol' if pkg.carbonation_vol else '—' }}</td>
+          <td class="small">
+            {% if pkg.priming_sugar_g and pkg.priming_sugar_type %}
+            {{ '%.0f'|format(pkg.priming_sugar_g) }}g {{ pkg.priming_sugar_type }}
+            {% elif pkg.priming_sugar_type %}{{ pkg.priming_sugar_type }}
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-end">{{ '%.1f'|format(pkg.co2_psi) if pkg.co2_psi else '—' }}</td>
+          <td class="text-end">{{ '%.3f'|format(pkg.final_gravity) if pkg.final_gravity else '—' }}</td>
+          <td><small class="text-muted">{{ pkg.notes or '' }}</small></td>
+          <td class="text-end">
+            <form method="post" action="/brew-sessions/{{ session.id }}/packaging/{{ pkg.id }}/delete"
+                  class="d-inline" onsubmit="return confirm('Remove this packaging entry?')">
+              <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="text-center text-muted py-3 small">No packaging logged yet.</div>
+  {% endif %}
+  <div class="card-footer bg-body-secondary">
+    <div class="fw-semibold mb-2 small text-uppercase text-muted">Log Packaging</div>
+    <form method="post" action="/brew-sessions/{{ session.id }}/packaging">
+      <div class="row g-2 align-items-end mb-2">
+        <div class="col-md-2">
+          <label class="form-label small">Date</label>
+          <input type="date" name="package_date" class="form-control form-control-sm"
+                 value="{{ now_dt.strftime('%Y-%m-%d') }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Method <span class="text-danger">*</span></label>
+          <select name="method" class="form-select form-select-sm" required>
+            <option value="">— select —</option>
+            <option value="bottle">Bottle</option>
+            <option value="keg">Keg</option>
+            <option value="can">Can</option>
+            <option value="cask">Cask / Firkin</option>
+          </select>
+        </div>
+        <div class="col-md-1">
+          <label class="form-label small">Volume (L)</label>
+          <input type="number" name="fill_volume_l" class="form-control form-control-sm"
+                 step="0.1" min="0"
+                 placeholder="{{ session.actual_batch_size_l or '' }}">
+        </div>
+        <div class="col-md-1">
+          <label class="form-label small">Vessels #</label>
+          <input type="number" name="vessel_count" class="form-control form-control-sm"
+                 step="1" min="0" placeholder="24">
+        </div>
+        <div class="col-md-1">
+          <label class="form-label small">Carb (vol)</label>
+          <input type="number" name="carbonation_vol" class="form-control form-control-sm"
+                 step="0.1" min="0" max="5" placeholder="2.5">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Priming Sugar</label>
+          <div class="input-group input-group-sm">
+            <input type="number" name="priming_sugar_g" class="form-control"
+                   step="1" min="0" placeholder="g">
+            <select name="priming_sugar_type" class="form-select" style="max-width:90px;">
+              <option value="">—</option>
+              <option value="sucrose">Sucrose</option>
+              <option value="dextrose">Dextrose</option>
+              <option value="DME">DME</option>
+            </select>
+          </div>
+        </div>
+        <div class="col-md-1">
+          <label class="form-label small">CO₂ PSI</label>
+          <input type="number" name="co2_psi" class="form-control form-control-sm"
+                 step="0.5" min="0" placeholder="12">
+        </div>
+        <div class="col-md-1">
+          <label class="form-label small">Final Gravity</label>
+          <input type="number" name="final_gravity" class="form-control form-control-sm"
+                 step="0.001" min="0.990" max="1.100" placeholder="1.010">
+        </div>
+      </div>
+      <div class="row g-2 align-items-end">
+        <div class="col-md-11">
+          <input type="text" name="notes" class="form-control form-control-sm"
+                 placeholder="Notes (optional)">
+        </div>
+        <div class="col-md-1">
+          <button type="submit" class="btn btn-brew btn-sm w-100">Add</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
 
 <!-- Barrel Aging -->
 <div class="card mb-4">

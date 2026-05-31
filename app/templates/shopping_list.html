@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Shopping List — Brewbot{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2 class="mb-0"><i class="bi bi-cart3 me-2"></i>Shopping List</h2>
+</div>
+
+<div class="row g-4">
+
+  <!-- Session selector -->
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Select Sessions</div>
+      <div class="card-body">
+        {% if all_sessions %}
+        <form method="get" action="/shopping-list">
+          <p class="text-muted small mb-3">Choose the planned sessions you want to shop for. Ingredient needs are summed from each session's recipe.</p>
+          {% for s in all_sessions %}
+          <div class="form-check mb-2">
+            <input type="checkbox" name="session_ids" value="{{ s.id }}"
+                   class="form-check-input" id="sess_{{ s.id }}"
+                   {% if s.id in selected_ids %}checked{% endif %}>
+            <label class="form-check-label" for="sess_{{ s.id }}">
+              <span class="fw-semibold">{{ s.recipe.name if s.recipe else '(no recipe)' }}</span>
+              <span class="badge bg-secondary ms-1 text-capitalize">{{ s.status }}</span>
+              {% if s.brew_date %}
+              <small class="text-muted d-block">{{ s.brew_date.strftime('%Y-%m-%d') }}</small>
+              {% endif %}
+            </label>
+          </div>
+          {% endfor %}
+          <button type="submit" class="btn btn-brew mt-3 w-100">
+            <i class="bi bi-cart3 me-1"></i>Generate List
+          </button>
+        </form>
+        {% else %}
+        <p class="text-muted">No planned or active sessions found. Create a session and set it to <em>Planned</em> or <em>Brewing</em> to see it here.</p>
+        <a href="/brew-sessions/new" class="btn btn-brew">
+          <i class="bi bi-plus-lg me-1"></i>New Session
+        </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div class="col-lg-8">
+    {% if shopping %}
+    <div class="mb-3">
+      <h5 class="mb-1">Ingredients needed for:</h5>
+      <p class="text-muted small mb-0">
+        {{ shopping.session_names | join(', ') }}
+      </p>
+    </div>
+
+    {% set categories = [
+      ('fermentables', 'Fermentables', 'bi-layers', 'kg'),
+      ('hops', 'Hops', 'bi-flower1', 'g'),
+      ('yeasts', 'Yeasts', 'bi-virus', None),
+      ('miscs', 'Misc / Additions', 'bi-droplet', None),
+    ] %}
+
+    {% for key, title, icon, default_unit in categories %}
+    {% if shopping[key] %}
+    <div class="card mb-3">
+      <div class="card-header fw-semibold">
+        <i class="bi {{ icon }} me-1"></i>{{ title }}
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Ingredient</th>
+              <th class="text-end">Needed</th>
+              <th class="text-end">In Stock</th>
+              <th class="text-end">To Buy</th>
+              <th class="text-center" style="width:80px;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in shopping[key] %}
+            {% set shortfall = item.needed - item.stock %}
+            <tr class="{% if shortfall > 0 %}table-warning{% endif %}">
+              <td class="fw-semibold">{{ item.name }}</td>
+              <td class="text-end">
+                {{ '%.3f'|format(item.needed) if item.needed < 1 and (key == 'fermentables') else '%.2f'|format(item.needed) if key == 'fermentables' else '%.0f'|format(item.needed) if key == 'hops' else '%.2f'|format(item.needed) }}
+                {{ item.unit }}
+              </td>
+              <td class="text-end {% if item.stock <= 0 %}text-danger{% elif item.stock < item.needed %}text-warning fw-semibold{% else %}text-success{% endif %}">
+                {{ '%.2f'|format(item.stock) if key == 'fermentables' else '%.0f'|format(item.stock) if key == 'hops' else '%.2f'|format(item.stock) }}
+                {{ item.unit }}
+              </td>
+              <td class="text-end fw-semibold {% if shortfall > 0 %}text-danger{% else %}text-muted{% endif %}">
+                {% if shortfall > 0 %}
+                {{ '%.2f'|format(shortfall) if key == 'fermentables' else '%.0f'|format(shortfall) if key == 'hops' else '%.2f'|format(shortfall) }}
+                {{ item.unit }}
+                {% else %}
+                <span class="text-success"><i class="bi bi-check-lg"></i></span>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                {% if shortfall > 0 %}
+                <span class="badge bg-warning text-dark">Buy</span>
+                {% elif item.stock == 0 and item.needed == 0 %}
+                <span class="badge bg-secondary">—</span>
+                {% else %}
+                <span class="badge bg-success">OK</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+
+    {% set total_short = [] %}
+    {% for key, _, _, _ in categories %}
+      {% for item in shopping[key] %}
+        {% if item.needed > item.stock %}{% set _ = total_short.append(1) %}{% endif %}
+      {% endfor %}
+    {% endfor %}
+
+    <div class="alert {% if total_short %}alert-warning{% else %}alert-success{% endif %} d-flex align-items-center gap-2">
+      {% if total_short %}
+      <i class="bi bi-cart-x fs-5"></i>
+      <span><strong>{{ total_short | length }} ingredient(s)</strong> need to be purchased before brewing.</span>
+      {% else %}
+      <i class="bi bi-cart-check fs-5"></i>
+      <span><strong>All ingredients are in stock!</strong> You're ready to brew.</span>
+      {% endif %}
+    </div>
+
+    {% elif selected_ids %}
+    <div class="alert alert-info">No ingredient data found for the selected sessions.</div>
+    {% else %}
+    <div class="card">
+      <div class="card-body text-center py-5 text-muted">
+        <i class="bi bi-cart3 fs-1 d-block mb-3"></i>
+        <p class="mb-0">Select sessions on the left and click <strong>Generate List</strong> to see what ingredients you need to buy.</p>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
+
+{% block page_help %}
+<h6>Shopping List</h6>
+<p>Select one or more planned or brewing sessions to generate a consolidated ingredient shopping list. Quantities are summed from each session's recipe.</p>
+<p><strong>To Buy</strong> = Needed − In Stock. Rows highlighted in yellow require purchasing.</p>
+<p>Update stock quantities from the <a href="/ingredients">Ingredients</a> page, or enable <em>Deduct ingredients from inventory</em> when creating a session to auto-deduct.</p>
+{% endblock %}

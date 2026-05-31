@@ -36,6 +36,14 @@
             <textarea name="notes" class="form-control" rows="4"
                       placeholder="Water chemistry, adjustments, …"></textarea>
           </div>
+          <div class="mb-3 form-check">
+            <input type="checkbox" name="deduct_inventory" value="1"
+                   class="form-check-input" id="deductInvCheck">
+            <label class="form-check-label" for="deductInvCheck">
+              Deduct ingredients from inventory
+            </label>
+            <div class="form-text">Reduces stock quantities for all recipe ingredients immediately.</div>
+          </div>
           <div class="d-flex gap-2">
             <button type="submit" class="btn btn-brew">
               <i class="bi bi-plus-lg me-1"></i>Start Session

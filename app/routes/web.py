@@ -22,6 +22,7 @@ from app.models.yeast import Yeast
 from app.models.user import User
 from app.models.barrel import Barrel, BarrelAgingRecord, BarrelAgingEntry, BarrelDispositionEntry
 from app.models.spirits import StillRun, StillCut
+from app.models.session_production import SessionDryHop, PackagingEntry
 from app.models.grape_variety import GrapeVariety, RecipeGrape
 from app.models.mash_step import MashStep
 from app.models.wine import WineMLFEntry, WineFiningEntry
@@ -906,18 +907,37 @@ def brew_session_new(request: Request, db: Session = Depends(get_db)):
     })
 
 
+def _deduct_inventory(recipe_id: int, db: Session):
+    """Subtract recipe ingredient amounts from library stock quantities (clamp at 0)."""
+    for rf in db.query(RecipeFermentable).filter(RecipeFermentable.recipe_id == recipe_id).all():
+        if rf.fermentable and rf.fermentable.stock_qty is not None:
+            rf.fermentable.stock_qty = max(0.0, (rf.fermentable.stock_qty or 0.0) - (rf.amount_kg or 0.0))
+    for rh in db.query(RecipeHop).filter(RecipeHop.recipe_id == recipe_id).all():
+        if rh.hop and rh.hop.stock_qty is not None:
+            rh.hop.stock_qty = max(0.0, (rh.hop.stock_qty or 0.0) - (rh.amount_g or 0.0))
+    for ry in db.query(RecipeYeast).filter(RecipeYeast.recipe_id == recipe_id).all():
+        if ry.yeast and ry.yeast.stock_qty is not None:
+            ry.yeast.stock_qty = max(0.0, (ry.yeast.stock_qty or 0.0) - (ry.amount or 0.0))
+    for rm in db.query(RecipeMisc).filter(RecipeMisc.recipe_id == recipe_id).all():
+        if rm.misc and rm.misc.stock_qty is not None:
+            rm.misc.stock_qty = max(0.0, (rm.misc.stock_qty or 0.0) - (rm.amount or 0.0))
+
+
 @router.post("/brew-sessions/create", response_class=HTMLResponse)
 async def brew_session_create(request: Request, db: Session = Depends(get_db)):
     form = await request.form()
     brew_date = None
     if form.get("brew_date"):
         brew_date = datetime.strptime(form["brew_date"], "%Y-%m-%d")
+    recipe_id = int(form["recipe_id"])
     db.add(BrewSession(
-        recipe_id=int(form["recipe_id"]),
+        recipe_id=recipe_id,
         status="planned",
         brew_date=brew_date,
         notes=form.get("notes") or None,
     ))
+    if form.get("deduct_inventory"):
+        _deduct_inventory(recipe_id, db)
     db.commit()
     return RedirectResponse("/brew-sessions", status_code=303)
 
@@ -925,11 +945,14 @@ async def brew_session_create(request: Request, db: Session = Depends(get_db)):
 @router.post("/brew-sessions", response_class=HTMLResponse)
 async def brew_session_create_modal(request: Request, db: Session = Depends(get_db)):
     form = await request.form()
+    recipe_id = int(form["recipe_id"])
     db.add(BrewSession(
-        recipe_id=int(form["recipe_id"]),
+        recipe_id=recipe_id,
         status="planned",
         notes=form.get("notes") or None,
     ))
+    if form.get("deduct_inventory"):
+        _deduct_inventory(recipe_id, db)
     db.commit()
     return RedirectResponse("/brew-sessions", status_code=303)
 
@@ -1508,6 +1531,8 @@ def brew_session_detail(session_id: int, request: Request, db: Session = Depends
         selectinload(BrewSession.mlf_entries),
         selectinload(BrewSession.fining_entries),
         selectinload(BrewSession.still_runs).selectinload(StillRun.cuts),
+        selectinload(BrewSession.dry_hops),
+        selectinload(BrewSession.packaging_entries),
     ).filter(BrewSession.id == session_id).first()
     if not session:
         return RedirectResponse("/brew-sessions", status_code=303)
@@ -1944,6 +1969,163 @@ def barrel_aging_record_delete(session_id: int, record_id: int, db: Session = De
         db.delete(record)
         db.commit()
     return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+
+
+# ── Session dry hop log ───────────────────────────────────────────────────────
+
+@router.post("/brew-sessions/{session_id}/dry-hops")
+async def dry_hop_create(session_id: int, request: Request, db: Session = Depends(get_db)):
+    session = db.get(BrewSession, session_id)
+    if not session:
+        return RedirectResponse("/brew-sessions", status_code=303)
+    form = await request.form()
+    from datetime import date as date_type
+    def _parse_date(s):
+        try:
+            return datetime.strptime(s, "%Y-%m-%d").date() if s else None
+        except ValueError:
+            return None
+    db.add(SessionDryHop(
+        session_id=session_id,
+        variety=form.get("variety") or None,
+        total_grams=float(form["total_grams"]) if form.get("total_grams") else None,
+        rate_g_per_l=float(form["rate_g_per_l"]) if form.get("rate_g_per_l") else None,
+        vessel=form.get("vessel") or None,
+        temp_c=float(form["temp_c"]) if form.get("temp_c") else None,
+        addition_date=_parse_date(form.get("addition_date")),
+        removal_date=_parse_date(form.get("removal_date")),
+        notes=form.get("notes") or None,
+    ))
+    db.commit()
+    return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+
+
+@router.post("/brew-sessions/{session_id}/dry-hops/{dh_id}/delete")
+def dry_hop_delete(session_id: int, dh_id: int, db: Session = Depends(get_db)):
+    dh = db.get(SessionDryHop, dh_id)
+    if dh and dh.session_id == session_id:
+        db.delete(dh)
+        db.commit()
+    return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+
+
+# ── Session packaging log ──────────────────────────────────────────────────────
+
+@router.post("/brew-sessions/{session_id}/packaging")
+async def packaging_create(session_id: int, request: Request, db: Session = Depends(get_db)):
+    session = db.get(BrewSession, session_id)
+    if not session:
+        return RedirectResponse("/brew-sessions", status_code=303)
+    form = await request.form()
+    def _parse_date(s):
+        try:
+            return datetime.strptime(s, "%Y-%m-%d").date() if s else None
+        except ValueError:
+            return None
+    db.add(PackagingEntry(
+        session_id=session_id,
+        package_date=_parse_date(form.get("package_date")),
+        method=form.get("method") or None,
+        vessel_count=int(form["vessel_count"]) if form.get("vessel_count") else None,
+        fill_volume_l=float(form["fill_volume_l"]) if form.get("fill_volume_l") else None,
+        carbonation_vol=float(form["carbonation_vol"]) if form.get("carbonation_vol") else None,
+        priming_sugar_type=form.get("priming_sugar_type") or None,
+        priming_sugar_g=float(form["priming_sugar_g"]) if form.get("priming_sugar_g") else None,
+        co2_psi=float(form["co2_psi"]) if form.get("co2_psi") else None,
+        final_gravity=float(form["final_gravity"]) if form.get("final_gravity") else None,
+        notes=form.get("notes") or None,
+    ))
+    db.commit()
+    return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+
+
+@router.post("/brew-sessions/{session_id}/packaging/{entry_id}/delete")
+def packaging_delete(session_id: int, entry_id: int, db: Session = Depends(get_db)):
+    entry = db.get(PackagingEntry, entry_id)
+    if entry and entry.session_id == session_id:
+        db.delete(entry)
+        db.commit()
+    return RedirectResponse(f"/brew-sessions/{session_id}", status_code=303)
+
+
+# ── Shopping list ──────────────────────────────────────────────────────────────
+
+@router.get("/shopping-list", response_class=HTMLResponse)
+def shopping_list(request: Request, db: Session = Depends(get_db)):
+    from collections import defaultdict
+
+    all_sessions = (
+        db.query(BrewSession)
+        .options(selectinload(BrewSession.recipe))
+        .filter(BrewSession.status.in_(["planned", "brewing", "fermenting"]))
+        .order_by(BrewSession.brew_date.asc().nullslast())
+        .all()
+    )
+
+    session_ids = [int(v) for k, v in request.query_params.multi_items() if k == "session_ids"]
+
+    shopping = None
+    if session_ids:
+        selected = (
+            db.query(BrewSession)
+            .options(
+                selectinload(BrewSession.recipe).selectinload(Recipe.fermentables),
+                selectinload(BrewSession.recipe).selectinload(Recipe.hops),
+                selectinload(BrewSession.recipe).selectinload(Recipe.yeasts),
+                selectinload(BrewSession.recipe).selectinload(Recipe.miscs),
+            )
+            .filter(BrewSession.id.in_(session_ids))
+            .all()
+        )
+
+        fermentable_needs = defaultdict(lambda: {"name": "", "needed": 0.0, "stock": 0.0, "unit": "kg"})
+        hop_needs = defaultdict(lambda: {"name": "", "needed": 0.0, "stock": 0.0, "unit": "g"})
+        yeast_needs = defaultdict(lambda: {"name": "", "needed": 0.0, "stock": 0.0, "unit": "pkg"})
+        misc_needs = defaultdict(lambda: {"name": "", "needed": 0.0, "stock": 0.0, "unit": "g"})
+
+        for sess in selected:
+            if not sess.recipe:
+                continue
+            for rf in sess.recipe.fermentables:
+                f = rf.fermentable
+                fermentable_needs[f.id]["name"] = f.name
+                fermentable_needs[f.id]["needed"] += rf.amount_kg or 0.0
+                fermentable_needs[f.id]["stock"] = f.stock_qty or 0.0
+            for rh in sess.recipe.hops:
+                h = rh.hop
+                hop_needs[h.id]["name"] = h.name
+                hop_needs[h.id]["needed"] += rh.amount_g or 0.0
+                hop_needs[h.id]["stock"] = h.stock_qty or 0.0
+            for ry in sess.recipe.yeasts:
+                y = ry.yeast
+                yeast_needs[y.id]["name"] = f"{y.name} ({y.lab or '?'})"
+                yeast_needs[y.id]["needed"] += ry.amount or 0.0
+                yeast_needs[y.id]["stock"] = y.stock_qty or 0.0
+                yeast_needs[y.id]["unit"] = y.stock_unit or "pkg"
+            for rm in sess.recipe.miscs:
+                m = rm.misc
+                misc_needs[m.id]["name"] = m.name
+                misc_needs[m.id]["needed"] += rm.amount or 0.0
+                misc_needs[m.id]["stock"] = m.stock_qty or 0.0
+                misc_needs[m.id]["unit"] = m.stock_unit or "g"
+
+        def _sort_key(x):
+            return x["stock"] - x["needed"]
+
+        shopping = {
+            "fermentables": sorted(fermentable_needs.values(), key=_sort_key),
+            "hops": sorted(hop_needs.values(), key=_sort_key),
+            "yeasts": sorted(yeast_needs.values(), key=_sort_key),
+            "miscs": sorted(misc_needs.values(), key=_sort_key),
+            "session_names": [s.recipe.name if s.recipe else f"#{s.id}" for s in selected],
+        }
+
+    return templates.TemplateResponse(request, "shopping_list.html", {
+        "all_sessions": all_sessions,
+        "selected_ids": session_ids,
+        "shopping": shopping,
+        "page": "shopping_list",
+    })
 
 
 # ── Grape variety library ─────────────────────────────────────────────────────

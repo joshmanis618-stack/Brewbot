@@ -74,3 +74,15 @@ class BrewSession(Base):
         cascade="all, delete-orphan",
         order_by="StillRun.run_number",
     )
+    dry_hops = relationship(
+        "SessionDryHop",
+        back_populates="session",
+        cascade="all, delete-orphan",
+        order_by="SessionDryHop.addition_date",
+    )
+    packaging_entries = relationship(
+        "PackagingEntry",
+        back_populates="session",
+        cascade="all, delete-orphan",
+        order_by="PackagingEntry.package_date",
+    )
