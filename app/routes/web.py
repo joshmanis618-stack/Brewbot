@@ -1659,6 +1659,11 @@ def spirits_tools_page(request: Request):
     return templates.TemplateResponse(request, "spirits_tools.html", {"page": "spirits_tools"})
 
 
+@router.get("/mead-tools", response_class=HTMLResponse)
+def mead_tools_page(request: Request):
+    return templates.TemplateResponse(request, "mead_tools.html", {"page": "mead_tools"})
+
+
 # ── Still run log ─────────────────────────────────────────────────────────────
 
 @router.post("/brew-sessions/{session_id}/still-runs")

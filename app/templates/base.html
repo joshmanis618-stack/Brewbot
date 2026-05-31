@@ -118,6 +118,13 @@
           </a>
         </li>
         {% endif %}
+        {% if current_craft == 'mead' %}
+        <li class="nav-item">
+          <a class="nav-link rounded px-3 {% if page == 'mead_tools' %}active{% endif %}" href="/mead-tools">
+            <i class="bi bi-droplet me-1"></i>Mead Tools
+          </a>
+        </li>
+        {% endif %}
         {% if current_craft == 'spirits' %}
         <li class="nav-item">
           <a class="nav-link rounded px-3 {% if page == 'spirits_tools' %}active{% endif %}" href="/spirits-tools">
