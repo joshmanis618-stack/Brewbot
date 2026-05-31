@@ -26,7 +26,23 @@ from app.routes.web import router as web_router, public_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 1. Create all tables from current models (idempotent, safe on existing DBs)
     Base.metadata.create_all(bind=engine)
+
+    # 2. Alembic: stamp fresh installs as current; upgrade existing installs
+    from alembic.config import Config
+    from alembic import command as alembic_command
+    from sqlalchemy import inspect as sa_inspect, text
+
+    alembic_cfg = Config("alembic.ini")
+    with engine.connect() as conn:
+        if not sa_inspect(engine).has_table("alembic_version"):
+            # Brand-new DB — create_all already built everything; just record current revision
+            alembic_command.stamp(alembic_cfg, "head")
+        else:
+            # Existing install — apply any pending migrations
+            alembic_command.upgrade(alembic_cfg, "head")
+
     db = SessionLocal()
     try:
         seed_module.run(db)
