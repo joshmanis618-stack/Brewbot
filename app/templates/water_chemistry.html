@@ -1,0 +1,418 @@
+{% extends "base.html" %}
+{% block title %}Water Chemistry — Brewbot{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2 class="mb-0"><i class="bi bi-droplet-half me-2"></i>Water Chemistry</h2>
+</div>
+
+<div class="row g-4">
+
+  <!-- ── Source Water ──────────────────────────────────────────────────────── -->
+  <div class="col-md-6 col-xl-5">
+    <div class="card">
+      <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+        Source Water Profile
+        <select id="preset_select" class="form-select form-select-sm w-auto" onchange="applyPreset()">
+          <option value="">— Load preset —</option>
+          <optgroup label="Source Water">
+            <option value="ro">Distilled / RO</option>
+            <option value="pilsen">Pilsen (Czech)</option>
+            <option value="munich">Munich</option>
+            <option value="dublin">Dublin</option>
+            <option value="burton">Burton-on-Trent</option>
+            <option value="london">London</option>
+            <option value="edinburgh">Edinburgh</option>
+          </optgroup>
+          <optgroup label="Target Profiles">
+            <option value="t_ipa">IPA / Hoppy Ale</option>
+            <option value="t_balanced">Balanced Ale</option>
+            <option value="t_stout">Stout / Porter</option>
+            <option value="t_lager">Lager / Pilsner</option>
+            <option value="t_mead">Mead</option>
+            <option value="t_cider">Cider</option>
+          </optgroup>
+        </select>
+      </div>
+      <div class="card-body">
+        <div class="row g-2 mb-3">
+          <div class="col-6 col-md-4">
+            <label class="form-label small mb-1">Ca²⁺ (ppm)</label>
+            <input id="src_ca" type="number" step="1" min="0" class="form-control form-control-sm" placeholder="0" value="0" oninput="calcWater()">
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label small mb-1">Mg²⁺ (ppm)</label>
+            <input id="src_mg" type="number" step="1" min="0" class="form-control form-control-sm" placeholder="0" value="0" oninput="calcWater()">
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label small mb-1">Na⁺ (ppm)</label>
+            <input id="src_na" type="number" step="1" min="0" class="form-control form-control-sm" placeholder="0" value="0" oninput="calcWater()">
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label small mb-1">Cl⁻ (ppm)</label>
+            <input id="src_cl" type="number" step="1" min="0" class="form-control form-control-sm" placeholder="0" value="0" oninput="calcWater()">
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label small mb-1">SO₄²⁻ (ppm)</label>
+            <input id="src_so4" type="number" step="1" min="0" class="form-control form-control-sm" placeholder="0" value="0" oninput="calcWater()">
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label small mb-1">HCO₃⁻ (ppm)</label>
+            <input id="src_hco3" type="number" step="1" min="0" class="form-control form-control-sm" placeholder="0" value="0" oninput="calcWater()">
+          </div>
+        </div>
+        <div class="row g-2 align-items-end">
+          <div class="col-6">
+            <label class="form-label small mb-1">Batch volume (L)</label>
+            <input id="vol_l" type="number" step="0.5" min="1" class="form-control form-control-sm" placeholder="20" value="20" oninput="calcWater()">
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1">Grist color (°L, optional)</label>
+            <input id="grist_lov" type="number" step="1" min="0" class="form-control form-control-sm" placeholder="e.g. 4" oninput="calcWater()">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Mineral Additions ─────────────────────────────────────────────── -->
+    <div class="card mt-4">
+      <div class="card-header fw-semibold">Mineral Additions (grams per batch)</div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead>
+            <tr>
+              <th class="ps-3">Mineral</th>
+              <th style="width:90px">Grams</th>
+              <th class="text-muted small pe-3">Adds</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="ps-3">
+                <span class="fw-semibold">Gypsum</span>
+                <small class="text-muted d-block">CaSO₄·2H₂O</small>
+              </td>
+              <td><input id="min_gypsum" type="number" step="0.1" min="0" class="form-control form-control-sm" placeholder="0" value="0" oninput="calcWater()"></td>
+              <td class="text-muted small pe-3">Ca, SO₄</td>
+            </tr>
+            <tr>
+              <td class="ps-3">
+                <span class="fw-semibold">Calcium Chloride</span>
+                <small class="text-muted d-block">CaCl₂</small>
+              </td>
+              <td><input id="min_cacl2" type="number" step="0.1" min="0" class="form-control form-control-sm" placeholder="0" value="0" oninput="calcWater()"></td>
+              <td class="text-muted small pe-3">Ca, Cl</td>
+            </tr>
+            <tr>
+              <td class="ps-3">
+                <span class="fw-semibold">Epsom Salt</span>
+                <small class="text-muted d-block">MgSO₄·7H₂O</small>
+              </td>
+              <td><input id="min_mgso4" type="number" step="0.1" min="0" class="form-control form-control-sm" placeholder="0" value="0" oninput="calcWater()"></td>
+              <td class="text-muted small pe-3">Mg, SO₄</td>
+            </tr>
+            <tr>
+              <td class="ps-3">
+                <span class="fw-semibold">Table Salt</span>
+                <small class="text-muted d-block">NaCl</small>
+              </td>
+              <td><input id="min_nacl" type="number" step="0.1" min="0" class="form-control form-control-sm" placeholder="0" value="0" oninput="calcWater()"></td>
+              <td class="text-muted small pe-3">Na, Cl</td>
+            </tr>
+            <tr>
+              <td class="ps-3">
+                <span class="fw-semibold">Baking Soda</span>
+                <small class="text-muted d-block">NaHCO₃</small>
+              </td>
+              <td><input id="min_nahco3" type="number" step="0.1" min="0" class="form-control form-control-sm" placeholder="0" value="0" oninput="calcWater()"></td>
+              <td class="text-muted small pe-3">Na, HCO₃</td>
+            </tr>
+            <tr>
+              <td class="ps-3">
+                <span class="fw-semibold">Slaked Lime</span>
+                <small class="text-muted d-block">Ca(OH)₂</small>
+              </td>
+              <td><input id="min_caoh2" type="number" step="0.1" min="0" class="form-control form-control-sm" placeholder="0" value="0" oninput="calcWater()"></td>
+              <td class="text-muted small pe-3">Ca, ↑Alk</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Results ───────────────────────────────────────────────────────────── -->
+  <div class="col-md-6 col-xl-7">
+
+    <!-- Final Profile -->
+    <div class="card mb-4">
+      <div class="card-header fw-semibold">Resulting Water Profile</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr>
+                <th class="ps-3">Ion</th>
+                <th class="text-center">Source</th>
+                <th class="text-center">Added</th>
+                <th class="text-center fw-bold">Final</th>
+                <th class="text-center text-muted small pe-3">Acceptable Range</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="ps-3">Ca²⁺</td>
+                <td class="text-center" id="r_src_ca">0</td>
+                <td class="text-center" id="r_add_ca">0</td>
+                <td class="text-center fw-bold" id="r_ca">0</td>
+                <td class="text-center small text-muted pe-3">50–150 ppm</td>
+              </tr>
+              <tr>
+                <td class="ps-3">Mg²⁺</td>
+                <td class="text-center" id="r_src_mg">0</td>
+                <td class="text-center" id="r_add_mg">0</td>
+                <td class="text-center fw-bold" id="r_mg">0</td>
+                <td class="text-center small text-muted pe-3">0–30 ppm</td>
+              </tr>
+              <tr>
+                <td class="ps-3">Na⁺</td>
+                <td class="text-center" id="r_src_na">0</td>
+                <td class="text-center" id="r_add_na">0</td>
+                <td class="text-center fw-bold" id="r_na">0</td>
+                <td class="text-center small text-muted pe-3">0–150 ppm</td>
+              </tr>
+              <tr>
+                <td class="ps-3">Cl⁻</td>
+                <td class="text-center" id="r_src_cl">0</td>
+                <td class="text-center" id="r_add_cl">0</td>
+                <td class="text-center fw-bold" id="r_cl">0</td>
+                <td class="text-center small text-muted pe-3">0–250 ppm</td>
+              </tr>
+              <tr>
+                <td class="ps-3">SO₄²⁻</td>
+                <td class="text-center" id="r_src_so4">0</td>
+                <td class="text-center" id="r_add_so4">0</td>
+                <td class="text-center fw-bold" id="r_so4">0</td>
+                <td class="text-center small text-muted pe-3">50–400 ppm</td>
+              </tr>
+              <tr>
+                <td class="ps-3">HCO₃⁻</td>
+                <td class="text-center" id="r_src_hco3">0</td>
+                <td class="text-center" id="r_add_hco3">0</td>
+                <td class="text-center fw-bold" id="r_hco3">0</td>
+                <td class="text-center small text-muted pe-3">0–300 ppm</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Metrics -->
+    <div class="row g-3 mb-4">
+      <div class="col-sm-4">
+        <div class="card text-center h-100">
+          <div class="card-body py-3">
+            <div class="small text-muted mb-1">Cl : SO₄ Ratio</div>
+            <div class="fw-bold fs-4" id="r_clso4">—</div>
+            <div class="small text-muted mt-1" id="r_clso4_label">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-4">
+        <div class="card text-center h-100">
+          <div class="card-body py-3">
+            <div class="small text-muted mb-1">Residual Alkalinity</div>
+            <div class="fw-bold fs-4" id="r_ra">—</div>
+            <div class="small text-muted mt-1">ppm as CaCO₃</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-4">
+        <div class="card text-center h-100">
+          <div class="card-body py-3">
+            <div class="small text-muted mb-1">Est. Mash pH</div>
+            <div class="fw-bold fs-4" id="r_ph">—</div>
+            <div class="small text-muted mt-1">pale grist baseline</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Flavor Reference -->
+    <div class="card mb-4">
+      <div class="card-header fw-semibold">Cl:SO₄ Flavor Balance Reference</div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead><tr><th class="ps-3">Ratio</th><th>Character</th><th class="pe-3">Best for</th></tr></thead>
+          <tbody>
+            <tr><td class="ps-3">&lt; 0.5</td><td>Very bitter, dry</td><td class="pe-3">West Coast IPA, Saison</td></tr>
+            <tr><td class="ps-3">0.5–1.0</td><td>Crisp, slightly hoppy</td><td class="pe-3">Pale Ale, Pilsner</td></tr>
+            <tr><td class="ps-3">1.0</td><td>Balanced</td><td class="pe-3">Amber, Kölsch</td></tr>
+            <tr><td class="ps-3">1.0–2.0</td><td>Full, slightly malty</td><td class="pe-3">Brown Ale, Mild</td></tr>
+            <tr><td class="ps-3">&gt; 2.0</td><td>Round, malt-forward</td><td class="pe-3">Stout, Porter, Mead</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Guidelines -->
+    <div class="card">
+      <div class="card-header fw-semibold">Ion Guidelines</div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead><tr><th class="ps-3">Ion</th><th>Low (&lt; min)</th><th class="pe-3">High (&gt; max)</th></tr></thead>
+          <tbody>
+            <tr><td class="ps-3">Ca²⁺ (&lt;50)</td><td>Enzyme activity reduced</td><td class="pe-3">—</td></tr>
+            <tr><td class="ps-3">Mg²⁺ (&gt;30)</td><td>—</td><td class="pe-3">Harsh, astringent</td></tr>
+            <tr><td class="ps-3">Na⁺ (&gt;150)</td><td>—</td><td class="pe-3">Salty, medicinal</td></tr>
+            <tr><td class="ps-3">Cl⁻ (&gt;250)</td><td>—</td><td class="pe-3">Harsh, salty</td></tr>
+            <tr><td class="ps-3">SO₄²⁻ (&gt;400)</td><td>—</td><td class="pe-3">Dry, harsh</td></tr>
+            <tr><td class="ps-3">HCO₃⁻ (&gt;300)</td><td>—</td><td class="pe-3">Mash pH too high, harsh</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const MINERALS = {
+  gypsum: { ca: 232.9, mg: 0,    na: 0,     cl: 0,     so4: 558.2, hco3: 0      },
+  cacl2:  { ca: 361.2, mg: 0,    na: 0,     cl: 639.0, so4: 0,     hco3: 0      },
+  mgso4:  { ca: 0,     mg: 98.6, na: 0,     cl: 0,     so4: 389.8, hco3: 0      },
+  nacl:   { ca: 0,     mg: 0,    na: 393.4, cl: 606.6, so4: 0,     hco3: 0      },
+  nahco3: { ca: 0,     mg: 0,    na: 273.7, cl: 0,     so4: 0,     hco3: 726.4  },
+  caoh2:  { ca: 540.9, mg: 0,    na: 0,     cl: 0,     so4: 0,     hco3: 1649.0 },
+};
+
+const PRESETS = {
+  ro:          { ca:0,   mg:0,  na:0,  cl:0,  so4:0,   hco3:0   },
+  pilsen:      { ca:7,   mg:3,  na:4,  cl:5,  so4:10,  hco3:15  },
+  munich:      { ca:76,  mg:16, na:3,  cl:2,  so4:16,  hco3:295 },
+  dublin:      { ca:118, mg:4,  na:12, cl:19, so4:54,  hco3:319 },
+  burton:      { ca:268, mg:62, na:30, cl:36, so4:638, hco3:141 },
+  london:      { ca:52,  mg:32, na:86, cl:34, so4:32,  hco3:260 },
+  edinburgh:   { ca:100, mg:15, na:55, cl:50, so4:140, hco3:170 },
+  t_ipa:       { ca:150, mg:10, na:10, cl:50, so4:350, hco3:50  },
+  t_balanced:  { ca:75,  mg:5,  na:10, cl:75, so4:100, hco3:50  },
+  t_stout:     { ca:100, mg:5,  na:15, cl:65, so4:60,  hco3:150 },
+  t_lager:     { ca:50,  mg:5,  na:10, cl:50, so4:80,  hco3:50  },
+  t_mead:      { ca:50,  mg:5,  na:5,  cl:30, so4:50,  hco3:50  },
+  t_cider:     { ca:40,  mg:5,  na:5,  cl:25, so4:40,  hco3:30  },
+};
+
+function applyPreset() {
+  const key = document.getElementById('preset_select').value;
+  if (!key || !PRESETS[key]) return;
+  const p = PRESETS[key];
+  ['ca','mg','na','cl','so4','hco3'].forEach(ion => {
+    document.getElementById('src_' + ion).value = p[ion];
+  });
+  document.getElementById('preset_select').value = '';
+  calcWater();
+}
+
+function fv(id) { return parseFloat(document.getElementById(id).value) || 0; }
+
+function calcWater() {
+  const vol = Math.max(fv('vol_l'), 0.001);
+
+  const src = {
+    ca:   fv('src_ca'),
+    mg:   fv('src_mg'),
+    na:   fv('src_na'),
+    cl:   fv('src_cl'),
+    so4:  fv('src_so4'),
+    hco3: fv('src_hco3'),
+  };
+
+  const minerals = {
+    gypsum: fv('min_gypsum'),
+    cacl2:  fv('min_cacl2'),
+    mgso4:  fv('min_mgso4'),
+    nacl:   fv('min_nacl'),
+    nahco3: fv('min_nahco3'),
+    caoh2:  fv('min_caoh2'),
+  };
+
+  // Calculate added ppm (g / vol_L × ppm_per_g_per_L)
+  const added = { ca: 0, mg: 0, na: 0, cl: 0, so4: 0, hco3: 0 };
+  for (const [min, grams] of Object.entries(minerals)) {
+    const contrib = MINERALS[min];
+    for (const ion of Object.keys(added)) {
+      added[ion] += (grams / vol) * contrib[ion];
+    }
+  }
+
+  const final = {};
+  for (const ion of Object.keys(src)) {
+    final[ion] = src[ion] + added[ion];
+  }
+
+  // Update source column
+  ['ca','mg','na','cl','so4','hco3'].forEach(ion => {
+    document.getElementById('r_src_' + ion).textContent = src[ion].toFixed(0);
+    document.getElementById('r_add_' + ion).textContent = added[ion] > 0 ? '+' + added[ion].toFixed(1) : '0';
+    const cell = document.getElementById('r_' + ion);
+    cell.textContent = final[ion].toFixed(1);
+    cell.className = 'text-center fw-bold' + getIonClass(ion, final[ion]);
+  });
+
+  // Cl:SO4 ratio
+  const clso4 = final.so4 > 0 ? final.cl / final.so4 : null;
+  const clso4El = document.getElementById('r_clso4');
+  const clso4LabelEl = document.getElementById('r_clso4_label');
+  if (clso4 !== null) {
+    clso4El.textContent = clso4.toFixed(2);
+    if (clso4 < 0.5)       clso4LabelEl.textContent = 'Bitter / dry';
+    else if (clso4 < 1.0)  clso4LabelEl.textContent = 'Hoppy / crisp';
+    else if (clso4 < 1.1)  clso4LabelEl.textContent = 'Balanced';
+    else if (clso4 < 2.0)  clso4LabelEl.textContent = 'Malty / full';
+    else                   clso4LabelEl.textContent = 'Malt-forward';
+  } else {
+    clso4El.textContent = '—';
+    clso4LabelEl.textContent = '—';
+  }
+
+  // Residual Alkalinity
+  const alk_caco3 = final.hco3 * 0.820;
+  const ra = alk_caco3 - final.ca / 1.4 - final.mg / 1.7;
+  document.getElementById('r_ra').textContent = ra.toFixed(1);
+
+  // Mash pH estimate (Kolbach, simplified)
+  const gristLov = fv('grist_lov') || 3;
+  const pH = 5.72 - 0.0058 * (gristLov - 8) + ra / 260;
+  const phEl = document.getElementById('r_ph');
+  phEl.textContent = pH.toFixed(2);
+  phEl.className = 'fw-bold fs-4' + (pH < 5.1 ? ' text-danger' : pH > 5.8 ? ' text-warning' : ' text-success');
+}
+
+function getIonClass(ion, val) {
+  const ranges = {
+    ca:   [50, 150],
+    mg:   [0, 30],
+    na:   [0, 150],
+    cl:   [0, 250],
+    so4:  [50, 400],
+    hco3: [0, 300],
+  };
+  const [lo, hi] = ranges[ion];
+  if (val < lo || val > hi) return ' text-warning';
+  return '';
+}
+
+calcWater();
+</script>
+{% endblock %}
+
+{% block page_help %}
+<h6>Water Chemistry Calculator</h6>
+<p>Enter your source water profile and mineral additions to see the resulting water chemistry. Mineral doses are entered in grams per batch.</p>
+<h6>Residual Alkalinity (RA)</h6>
+<p>RA = Alkalinity (as CaCO₃) − Ca/1.4 − Mg/1.7. Negative RA lowers mash pH; positive RA raises it. Target RA −50 to +50 for pale beers, −50 to +100 for darker beers.</p>
+<h6>Mash pH</h6>
+<p>Estimated using the simplified Kolbach model. Accuracy improves when grist color (°Lovibond) is entered. Target mash pH is 5.2–5.6 for most beer styles.</p>
+<h6>Cl:SO₄ Ratio</h6>
+<p>Higher SO₄ accentuates hop bitterness; higher Cl rounds out malt sweetness. Adjust to match your style target.</p>
+{% endblock %}

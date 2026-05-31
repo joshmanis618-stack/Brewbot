@@ -255,7 +255,7 @@
   <!-- ── Priming Sugar ──────────────────────────────────────────────────── -->
   <div class="col-md-6 col-xl-4">
     <div class="card h-100">
-      <div class="card-header fw-semibold">Priming Sugar (Carbonation)</div>
+      <div class="card-header fw-semibold">Priming Sugar (Bottle/Cask)</div>
       <div class="card-body">
         <div class="mb-2">
           <label class="form-label small mb-1">Batch volume (L)</label>
@@ -275,19 +275,140 @@
         </div>
         <div class="mt-3 p-3 rounded bg-body-secondary">
           <div class="row text-center g-2">
-            <div class="col-6">
+            <div class="col-4">
               <div class="small text-muted">Table sugar (g)</div>
               <div class="fw-bold fs-5" id="p_sucrose">—</div>
             </div>
-            <div class="col-6">
-              <div class="small text-muted">Corn sugar / dextrose (g)</div>
+            <div class="col-4">
+              <div class="small text-muted">Dextrose (g)</div>
               <div class="fw-bold fs-5" id="p_dextrose">—</div>
+            </div>
+            <div class="col-4">
+              <div class="small text-muted">DME (g)</div>
+              <div class="fw-bold fs-5" id="p_dme">—</div>
             </div>
           </div>
         </div>
         <hr class="my-3">
         <div class="small text-muted">
-          CO₂ already in solution is subtracted based on beer temperature.
+          Residual CO₂ from fermentation temperature is subtracted before calculating additions. DME is approximately 75% fermentable.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Force Carbonation ────────────────────────────────────────────────── -->
+  <div class="col-md-6 col-xl-4">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Force Carbonation (Kegging)</div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">Find the CO₂ regulator pressure needed to hit a target carbonation level.</p>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Target CO₂ volumes</label>
+          <input id="fc_co2" type="number" step="0.1" min="0" max="5" class="form-control"
+                 placeholder="e.g. 2.4" value="2.4" oninput="calcForceCo2()">
+          <div class="form-text">Ale: 2.2–2.5 &nbsp;|&nbsp; Lager: 2.4–2.8 &nbsp;|&nbsp; Cider: 2.8–3.2</div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Beer temperature (°C)</label>
+          <input id="fc_temp" type="number" step="0.5" min="-2" max="30" class="form-control"
+                 placeholder="e.g. 4" value="4" oninput="calcForceCo2()">
+        </div>
+        <div class="mt-3 p-3 rounded bg-body-secondary">
+          <div class="row text-center g-2">
+            <div class="col-6">
+              <div class="small text-muted">Gauge pressure</div>
+              <div class="fw-bold fs-4" id="fc_psi">—</div>
+              <div class="small text-muted" id="fc_psi_label">PSI</div>
+            </div>
+            <div class="col-6">
+              <div class="small text-muted">Gauge pressure</div>
+              <div class="fw-bold fs-4" id="fc_bar">—</div>
+              <div class="small text-muted">bar</div>
+            </div>
+          </div>
+        </div>
+        <hr class="my-3">
+        <div class="small text-muted">
+          Based on Henry's Law: k<sub>H</sub>(T) = 0.2895 × e<sup>−0.0625T</sup> vol/PSI. Chill beer to serving temperature before measuring.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Yeast Starter ────────────────────────────────────────────────────── -->
+  <div class="col-md-6 col-xl-4">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Yeast Starter</div>
+      <div class="card-body">
+        <div class="row g-2 mb-2">
+          <div class="col-7">
+            <label class="form-label small mb-1">Yeast type</label>
+            <select id="ys_type" class="form-select" onchange="calcYeast()">
+              <option value="liquid">Liquid (Wyeast/White Labs, 100B cells)</option>
+              <option value="dry">Dry yeast (enter weight in g below)</option>
+            </select>
+          </div>
+          <div class="col-5" id="ys_dry_weight_group" style="display:none">
+            <label class="form-label small mb-1">Dry yeast weight (g)</label>
+            <input id="ys_dry_g" type="number" step="0.5" min="0" class="form-control"
+                   placeholder="e.g. 11" value="11" oninput="calcYeast()">
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Production / packaging date</label>
+          <input id="ys_prod_date" type="date" class="form-control" oninput="calcYeast()">
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small mb-1">Batch size (L)</label>
+            <input id="ys_batch" type="number" step="0.5" min="0" class="form-control"
+                   placeholder="e.g. 20" oninput="calcYeast()">
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1">OG</label>
+            <input id="ys_og" type="number" step="0.001" min="1" max="1.2" class="form-control"
+                   placeholder="e.g. 1.052" oninput="calcYeast()">
+          </div>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small mb-1">Starter volume (L)</label>
+            <input id="ys_svol" type="number" step="0.5" min="0" max="5" class="form-control"
+                   placeholder="e.g. 1" value="1" oninput="calcYeast()">
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1">Stir plate?</label>
+            <select id="ys_stir" class="form-select" onchange="calcYeast()">
+              <option value="1">Yes (stir plate)</option>
+              <option value="0">No (intermittent)</option>
+            </select>
+          </div>
+        </div>
+        <div class="mt-3 p-3 rounded bg-body-secondary">
+          <div class="row text-center g-2">
+            <div class="col-6">
+              <div class="small text-muted">Viable cells</div>
+              <div class="fw-bold" id="ys_viable">—</div>
+            </div>
+            <div class="col-6">
+              <div class="small text-muted">After starter</div>
+              <div class="fw-bold" id="ys_after">—</div>
+            </div>
+            <div class="col-6">
+              <div class="small text-muted">Target (ale)</div>
+              <div class="fw-bold" id="ys_target_ale">—</div>
+            </div>
+            <div class="col-6">
+              <div class="small text-muted">Target (lager)</div>
+              <div class="fw-bold" id="ys_target_lag">—</div>
+            </div>
+          </div>
+          <div class="mt-2 text-center small" id="ys_verdict">—</div>
+        </div>
+        <hr class="my-3">
+        <div class="small text-muted">
+          Viability: e<sup>−0.0116 × age(days)</sup>. Starter growth: 40B/L (stir) or 20B/L (no stir) per liter of 1.040 starter added to initial viable cells. Pitch rate: 0.75M/mL/°P ale, 1.5M/mL/°P lager.
         </div>
       </div>
     </div>
@@ -474,7 +595,6 @@ function calcIbu() {
 
 // ── Priming sugar ─────────────────────────────────────────────────────────────
 function co2InSolution(tempC) {
-  // Approximate dissolved CO2 in beer as a function of temperature
   return 3.0378 - 0.050062 * tempC + 0.00026555 * tempC * tempC;
 }
 function calcPriming() {
@@ -482,18 +602,110 @@ function calcPriming() {
   const co2   = parseFloat(document.getElementById('p_co2').value);
   const tempC = parseFloat(document.getElementById('p_temp').value);
   if (isNaN(vol) || isNaN(co2) || isNaN(tempC)) {
-    document.getElementById('p_sucrose').textContent = '—';
-    document.getElementById('p_dextrose').textContent = '—';
+    ['p_sucrose','p_dextrose','p_dme'].forEach(id => document.getElementById(id).textContent = '—');
     return;
   }
-  const residual = co2InSolution(tempC);
-  const neededCo2 = Math.max(0, co2 - residual); // volumes CO2 to add
-  // 1 gram sucrose produces ≈ 0.00285 volumes CO2 per litre
-  const sucrose  = neededCo2 * vol / 0.00285;
-  const dextrose = sucrose / 0.91; // dextrose is ~91% as fermentable
+  const residual  = co2InSolution(tempC);
+  const needed    = Math.max(0, co2 - residual);
+  // 1 g sucrose → ≈ 0.00285 vol CO₂/L; dextrose 91% fermentable; DME ~75% fermentable
+  const sucrose  = needed * vol / 0.00285;
+  const dextrose = sucrose / 0.91;
+  const dme      = sucrose / 0.75;
   document.getElementById('p_sucrose').textContent  = sucrose.toFixed(1)  + ' g';
   document.getElementById('p_dextrose').textContent = dextrose.toFixed(1) + ' g';
+  document.getElementById('p_dme').textContent      = dme.toFixed(1)      + ' g';
 }
+
+// ── Force carbonation ─────────────────────────────────────────────────────────
+function calcForceCo2() {
+  const volumes = parseFloat(document.getElementById('fc_co2').value);
+  const tempC   = parseFloat(document.getElementById('fc_temp').value);
+  if (isNaN(volumes) || isNaN(tempC)) {
+    document.getElementById('fc_psi').textContent = '—';
+    document.getElementById('fc_bar').textContent = '—';
+    return;
+  }
+  // Henry's Law: kH(T) = 0.2895 × exp(−0.0625 × T_C) volumes/PSI
+  const kH   = 0.2895 * Math.exp(-0.0625 * tempC);
+  const psi  = Math.max(0, volumes / kH);
+  const bar  = psi * 0.0689476;
+  document.getElementById('fc_psi').textContent = psi.toFixed(1) + ' PSI';
+  document.getElementById('fc_bar').textContent = bar.toFixed(2) + ' bar';
+}
+
+// ── Yeast starter ─────────────────────────────────────────────────────────────
+document.getElementById('ys_type').addEventListener('change', function() {
+  document.getElementById('ys_dry_weight_group').style.display =
+    this.value === 'dry' ? '' : 'none';
+  calcYeast();
+});
+function calcYeast() {
+  const type    = document.getElementById('ys_type').value;
+  const prodStr = document.getElementById('ys_prod_date').value;
+  const batch   = parseFloat(document.getElementById('ys_batch').value);
+  const og      = parseFloat(document.getElementById('ys_og').value);
+  const svol    = parseFloat(document.getElementById('ys_svol').value) || 0;
+  const stir    = document.getElementById('ys_stir').value === '1';
+
+  let nominalB;
+  if (type === 'dry') {
+    const dryG = parseFloat(document.getElementById('ys_dry_g').value) || 11;
+    nominalB = dryG * 20; // ~20B cells per gram dry yeast
+  } else {
+    nominalB = 100; // standard liquid pack
+  }
+
+  let viableB = nominalB;
+  if (prodStr) {
+    const prodDate = new Date(prodStr);
+    const now = new Date();
+    const days = Math.max(0, (now - prodDate) / 86400000);
+    viableB = nominalB * Math.exp(-0.0116 * days);
+    const viabPct = (viableB / nominalB * 100).toFixed(0);
+    document.getElementById('ys_viable').textContent =
+      viableB.toFixed(1) + 'B (' + viabPct + '%)';
+  } else {
+    document.getElementById('ys_viable').textContent = viableB.toFixed(1) + 'B';
+  }
+
+  // Growth from starter
+  const growthPerL = stir ? 40 : 20; // billion cells per liter of 1.040 starter
+  const afterB = viableB + (svol > 0 ? svol * growthPerL : 0);
+  document.getElementById('ys_after').textContent = afterB.toFixed(1) + 'B';
+
+  // Targets
+  if (!isNaN(batch) && !isNaN(og) && og > 1) {
+    const plato = 259 * (og - 1) / og;
+    const volMl = batch * 1000;
+    const targetAleB  = 0.75e6 * volMl * plato / 1e9;
+    const targetLagB  = 1.5e6  * volMl * plato / 1e9;
+    document.getElementById('ys_target_ale').textContent = targetAleB.toFixed(1) + 'B';
+    document.getElementById('ys_target_lag').textContent = targetLagB.toFixed(1) + 'B';
+    const ratio = afterB / targetAleB;
+    const v = document.getElementById('ys_verdict');
+    if (ratio >= 0.9 && ratio <= 1.3) {
+      v.textContent = '✓ Good pitch rate for ale';
+      v.className = 'mt-2 text-center small text-success';
+    } else if (ratio < 0.9) {
+      v.textContent = '↓ Under-pitched — consider a larger starter';
+      v.className = 'mt-2 text-center small text-warning';
+    } else {
+      v.textContent = '↑ Over-pitched (not harmful, minor flavour impact)';
+      v.className = 'mt-2 text-center small text-info';
+    }
+  } else {
+    ['ys_target_ale','ys_target_lag'].forEach(id => document.getElementById(id).textContent = '—');
+    document.getElementById('ys_verdict').textContent = 'Enter batch size and OG for pitch rate';
+    document.getElementById('ys_verdict').className = 'mt-2 text-center small text-muted';
+  }
+}
+// Set default production date to today
+(function() {
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('ys_prod_date').value = today;
+  calcYeast();
+  calcForceCo2();
+})();
 
 // ── Strike water ──────────────────────────────────────────────────────────────
 function calcStrike() {

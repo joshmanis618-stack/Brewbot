@@ -430,6 +430,91 @@ def recipe_delete(recipe_id: int, db: Session = Depends(get_db)):
     return RedirectResponse("/recipes", status_code=303)
 
 
+@router.post("/recipes/{recipe_id}/clone")
+def recipe_clone(recipe_id: int, db: Session = Depends(get_db)):
+    recipe = db.get(Recipe, recipe_id)
+    if not recipe:
+        return RedirectResponse("/recipes", status_code=303)
+
+    cloned = Recipe(
+        name=f"{recipe.name} (Copy)",
+        type=recipe.type,
+        style_id=recipe.style_id,
+        equipment_id=recipe.equipment_id,
+        batch_size_l=recipe.batch_size_l,
+        boil_size_l=recipe.boil_size_l,
+        boil_time_min=recipe.boil_time_min,
+        efficiency=recipe.efficiency,
+        notes=recipe.notes,
+        brewer=recipe.brewer,
+        craft=recipe.craft,
+        wine_style=recipe.wine_style,
+        skin_contact_days=recipe.skin_contact_days,
+        target_ta=recipe.target_ta,
+        target_ph=recipe.target_ph,
+        spirits_style=recipe.spirits_style,
+        mead_style=recipe.mead_style,
+        cider_style=recipe.cider_style,
+        seltzer_style=recipe.seltzer_style,
+    )
+    db.add(cloned)
+    db.flush()
+
+    for rf in recipe.fermentables:
+        db.add(RecipeFermentable(
+            recipe_id=cloned.id,
+            fermentable_id=rf.fermentable_id,
+            amount_kg=rf.amount_kg,
+            add_after_boil=rf.add_after_boil,
+        ))
+    for rh in recipe.hops:
+        db.add(RecipeHop(
+            recipe_id=cloned.id,
+            hop_id=rh.hop_id,
+            amount_g=rh.amount_g,
+            time_min=rh.time_min,
+            use=rh.use,
+            form=rh.form,
+        ))
+    for ry in recipe.yeasts:
+        db.add(RecipeYeast(
+            recipe_id=cloned.id,
+            yeast_id=ry.yeast_id,
+            amount=ry.amount,
+            add_to_secondary=ry.add_to_secondary,
+        ))
+    for rm in recipe.miscs:
+        db.add(RecipeMisc(
+            recipe_id=cloned.id,
+            misc_id=rm.misc_id,
+            amount=rm.amount,
+            amount_is_weight=rm.amount_is_weight,
+            time_min=rm.time_min,
+            use=rm.use,
+        ))
+    for rg in recipe.grapes:
+        db.add(RecipeGrape(
+            recipe_id=cloned.id,
+            grape_id=rg.grape_id,
+            amount_kg=rg.amount_kg,
+            percentage=rg.percentage,
+        ))
+    for ms in recipe.mash_steps:
+        db.add(MashStep(
+            recipe_id=cloned.id,
+            step_number=ms.step_number,
+            name=ms.name,
+            temp_c=ms.temp_c,
+            time_min=ms.time_min,
+        ))
+
+    db.flush()
+    db.refresh(cloned)
+    calc_service.calculate(cloned)
+    db.commit()
+    return RedirectResponse(f"/recipes/{cloned.id}/edit", status_code=303)
+
+
 _NO_EFF_TYPES = {"Sugar", "Extract", "Dry Extract"}
 
 @router.get("/recipes/{recipe_id}/scale", response_class=HTMLResponse)
@@ -1236,6 +1321,11 @@ def htmx_mash_step_row(index: int, request: Request):
 @router.get("/converter", response_class=HTMLResponse)
 def converter(request: Request):
     return templates.TemplateResponse(request, "converter.html", {"page": "converter"})
+
+
+@router.get("/water-chemistry", response_class=HTMLResponse)
+def water_chemistry(request: Request):
+    return templates.TemplateResponse(request, "water_chemistry.html", {"page": "water_chemistry"})
 
 
 # ── Inventory ─────────────────────────────────────────────────────────────────
